@@ -1,0 +1,2087 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>DRPA · Gestión de Expedientes</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCJ7ysULHhTnbSit2kecnTpkLdCI1wKDps",
+  authDomain: "drpa-xalapa.firebaseapp.com",
+  projectId: "drpa-xalapa",
+  storageBucket: "drpa-xalapa.firebasestorage.app",
+  messagingSenderId: "113903782116",
+  appId: "1:113903782116:web:7aec6b38c4c000fde044f1"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+db.enablePersistence().catch(()=>{});
+</script>
+<style>
+:root{
+  --bg:#0f0e0c;--sur:#1a1916;--sur2:#242220;
+  --bor:#2e2c29;--bor2:#3d3b37;
+  --gold:#c9a84c;--gl:#e8c97a;--gd:#7a6430;
+  --tx:#e8e4dc;--tm:#8a857a;--td:#5a5650;
+  --red:#e05a4a;--rd:#7a1e14;
+  --grn:#27ae60;--gl2:#4cd98a;
+  --blu:#2980b9;--bl2:#5ab0e8;--bld:#1a5070;
+  --org:#f0a050;--yel:#f1c40f;--pur:#8e44ad;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--tx);font-family:'IBM Plex Sans',sans-serif;min-height:100vh;}
+/* SYNC BAR */
+#syncBar{position:fixed;top:0;left:0;right:0;height:3px;background:var(--gold);z-index:9999;transform:scaleX(0);transform-origin:left;transition:transform .3s;}
+#syncBar.on{transform:scaleX(1);}
+/* LOGIN */
+#loginPage{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2rem;z-index:500;}
+.lbox{background:var(--sur);border:1px solid var(--bor2);padding:2.5rem;width:400px;max-width:95vw;}
+.llogo{font-family:'Playfair Display',serif;font-size:1.4rem;color:var(--gold);text-align:center;}
+.lsub{font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--td);text-align:center;letter-spacing:.1em;text-transform:uppercase;margin:.3rem 0 2rem;}
+.lerr{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--red);background:rgba(192,57,43,.08);border:1px solid var(--rd);padding:.5rem .75rem;margin-bottom:.75rem;display:none;}
+/* HEADER */
+#appHeader{background:var(--sur2);border-bottom:1px solid var(--bor);padding:.38rem 2rem;display:none;align-items:center;justify-content:space-between;}
+.huser{font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--td);display:flex;align-items:center;gap:.7rem;}
+.rchip{font-size:.55rem;padding:.07rem .35rem;border:1px solid;text-transform:uppercase;letter-spacing:.06em;}
+.rc-master{border-color:var(--gold);color:var(--gold);}
+.rc-abogado{border-color:var(--bl2);color:var(--bl2);}
+.rc-asistente{border-color:var(--gl2);color:var(--gl2);}
+.rc-consulta{border-color:var(--td);color:var(--td);}
+.cloud{font-family:'IBM Plex Mono',monospace;font-size:.58rem;color:var(--gl2);border:1px solid var(--grn);padding:.18rem .45rem;display:flex;align-items:center;gap:.3rem;}
+.cdot{width:6px;height:6px;border-radius:50%;background:var(--gl2);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hbtns{display:flex;gap:.4rem;align-items:center;}
+/* MAIN HEADER */
+header{border-bottom:1px solid var(--bor);padding:0 2rem;background:var(--bg);position:sticky;top:0;z-index:100;}
+.hinner{max-width:1500px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:54px;}
+.htitle{font-family:'Playfair Display',serif;font-size:1rem;color:var(--gold);letter-spacing:.05em;text-transform:uppercase;}
+.hsub{font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--td);letter-spacing:.1em;text-transform:uppercase;margin-left:.55rem;}
+.hright{display:flex;gap:.4rem;align-items:center;}
+/* NAV */
+.navwrap{max-width:1500px;margin:0 auto;padding:0 2rem;}
+nav{display:flex;border-bottom:1px solid var(--bor);overflow-x:auto;}
+.ntab{padding:.6rem 1rem;font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.07em;text-transform:uppercase;color:var(--td);cursor:pointer;border-bottom:2px solid transparent;transition:all .13s;background:transparent;border-top:none;border-left:none;border-right:none;white-space:nowrap;flex-shrink:0;}
+.ntab:hover{color:var(--tm);}
+.ntab.on{color:var(--gold);border-bottom-color:var(--gold);}
+.nsec{display:none;}
+.nsec.on{display:block;}
+/* LAYOUT */
+.layout{max-width:1500px;margin:0 auto;padding:1.5rem 2rem;display:grid;grid-template-columns:260px 1fr;gap:1.5rem;}
+/* SIDEBAR */
+.sb{display:flex;flex-direction:column;gap:.85rem;}
+.card{border:1px solid var(--bor);background:var(--sur);}
+.card-hd{padding:.65rem .9rem;border-bottom:1px solid var(--bor);display:flex;align-items:center;justify-content:space-between;}
+.card-hd-t{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.11em;text-transform:uppercase;color:var(--tm);}
+.badge{font-family:'IBM Plex Mono',monospace;font-size:.6rem;background:var(--gd);color:var(--gl);padding:.07rem .33rem;}
+.tlist{padding:.4rem;}
+.ti{display:flex;align-items:center;gap:.52rem;padding:.4rem .65rem;cursor:pointer;border:1px solid transparent;margin-bottom:2px;transition:background .12s;}
+.ti:hover{background:var(--sur2);}
+.ti.on{background:var(--sur2);border-color:var(--gd);}
+.tidot{width:5px;height:5px;border-radius:50%;background:var(--gd);flex-shrink:0;}
+.ti.on .tidot{background:var(--gold);}
+.tiname{font-size:.75rem;color:var(--tm);flex:1;}
+.ti.on .tiname{color:var(--tx);}
+.tisec{font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--td);}
+.addtbtn{margin:.4rem;width:calc(100% - .8rem);padding:.42rem;background:transparent;border:1px dashed var(--bor2);color:var(--td);font-family:'IBM Plex Mono',monospace;font-size:.64rem;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;transition:all .13s;}
+.addtbtn:hover{border-color:var(--gd);color:var(--gold);}
+.kgrid2{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--bor);border:1px solid var(--bor);}
+.kc{background:var(--sur);padding:.62rem;text-align:center;}
+.kn{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold);display:block;}
+.kl{font-family:'IBM Plex Mono',monospace;font-size:.53rem;color:var(--td);letter-spacing:.07em;text-transform:uppercase;display:block;margin-top:.1rem;}
+/* BUTTONS */
+.btnP{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1rem;background:var(--gold);color:var(--bg);border:none;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:500;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;transition:background .13s;}
+.btnP:hover{background:var(--gl);}
+.btnP:disabled{opacity:.35;cursor:not-allowed;}
+.btnS{padding:.48rem .82rem;background:transparent;border:1px solid var(--bor2);color:var(--tm);font-family:'IBM Plex Mono',monospace;font-size:.64rem;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;transition:all .13s;}
+.btnS:hover{border-color:var(--gd);color:var(--gold);}
+.btnD{padding:.48rem .82rem;background:transparent;border:1px solid var(--rd);color:var(--red);font-family:'IBM Plex Mono',monospace;font-size:.64rem;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;}
+/* INPUTS - never re-rendered while typing */
+input.fi,select.fs,textarea.fta{background:var(--bg);border:1px solid var(--bor);color:var(--tx);padding:.52rem .65rem;font-family:'IBM Plex Sans',sans-serif;font-size:.78rem;outline:none;width:100%;transition:border-color .13s;-webkit-appearance:none;}
+input.fi:focus,select.fs:focus,textarea.fta:focus{border-color:var(--gd);}
+input.fi::placeholder,textarea.fta::placeholder{color:var(--td);}
+input.fi:read-only{color:var(--tm);}
+select.fs option{background:var(--sur2);color:var(--tx);}
+textarea.fta{min-height:62px;resize:vertical;}
+.fld{display:flex;flex-direction:column;gap:.28rem;}
+.flbl{font-family:'IBM Plex Mono',monospace;font-size:.59rem;letter-spacing:.1em;text-transform:uppercase;color:var(--td);}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:.85rem;}
+.fr.f1{grid-template-columns:1fr;}
+.fr.f3{grid-template-columns:1fr 1fr 1fr;}
+/* TABLE */
+.twrap{border:1px solid var(--bor);overflow-x:auto;}
+.trow{padding:0 .7rem;border-bottom:1px solid var(--bor);display:grid;align-items:center;transition:background .1s;cursor:pointer;}
+.trow:last-child{border-bottom:none;}
+.trow:hover{background:var(--sur2);}
+.tcell{padding:.65rem .3rem;font-size:.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tcell.mono{font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--gold);}
+.throw{background:var(--sur2);border-bottom:1px solid var(--bor);padding:0 .7rem;display:grid;align-items:center;}
+.th{padding:.55rem .3rem;font-family:'IBM Plex Mono',monospace;font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;color:var(--td);}
+/* PILLS */
+.pill{font-family:'IBM Plex Mono',monospace;font-size:.53rem;padding:.08rem .3rem;border:1px solid;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;display:inline-block;}
+.p-amparo{border-color:#5b5;color:#9d9;}
+.p-contencioso{border-color:#55b;color:#99d;}
+.p-admin{border-color:#b85;color:#daa;}
+.p-civil{border-color:#b55;color:#d99;}
+.p-custom{border-color:var(--bor2);color:var(--tm);}
+.p-activo{border-color:var(--grn);color:var(--gl2);}
+.p-tramite{border-color:var(--blu);color:var(--bl2);}
+.p-suspendido{border-color:var(--yel);color:var(--yel);}
+.p-concluido{border-color:var(--td);color:var(--td);}
+.p-sobreseido{border-color:var(--pur);color:#c39;}
+.v-vencido{border-color:var(--red);color:var(--red);}
+.v-urgente{border-color:var(--org);color:var(--org);}
+.v-proximo{border-color:var(--yel);color:var(--yel);}
+.v-ok{border-color:var(--grn);color:var(--gl2);}
+/* MODAL */
+.mo{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:200;display:none;align-items:center;justify-content:center;padding:1.5rem;}
+.mo.on{display:flex;}
+.mbox{background:var(--sur);border:1px solid var(--bor2);width:100%;max-width:900px;max-height:93vh;overflow-y:auto;}
+.mbox.sm{max-width:480px;}
+.mbox.md{max-width:660px;}
+.mhd{padding:1rem 1.3rem;border-bottom:1px solid var(--bor);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--sur);z-index:1;}
+.mtitle{font-family:'Playfair Display',serif;font-size:1rem;color:var(--gold);}
+.mclose{width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--bor);color:var(--tm);cursor:pointer;font-size:.9rem;transition:all .12s;}
+.mclose:hover{border-color:var(--red);color:var(--red);}
+.mbody{padding:1.3rem;display:flex;flex-direction:column;gap:.9rem;}
+.mfoot{padding:.85rem 1.3rem;border-top:1px solid var(--bor);display:flex;justify-content:flex-end;gap:.55rem;position:sticky;bottom:0;background:var(--sur);}
+/* MODAL TABS */
+.mtabs{display:flex;border-bottom:1px solid var(--bor);margin:-1.3rem -1.3rem .9rem;overflow-x:auto;}
+.mtab{padding:.58rem .9rem;font-family:'IBM Plex Mono',monospace;font-size:.59rem;letter-spacing:.07em;text-transform:uppercase;color:var(--td);cursor:pointer;border-bottom:2px solid transparent;transition:all .12s;background:transparent;border-top:none;border-left:none;border-right:none;white-space:nowrap;}
+.mtab:hover{color:var(--tm);}
+.mtab.on{color:var(--gold);border-bottom-color:var(--gold);}
+.mpanel{display:none;}
+.mpanel.on{display:flex;flex-direction:column;gap:.9rem;}
+/* SECTION DIVIDER */
+.secttl{font-family:'IBM Plex Mono',monospace;font-size:.58rem;letter-spacing:.11em;text-transform:uppercase;color:var(--td);display:flex;align-items:center;gap:.65rem;}
+.secttl::after{content:'';flex:1;height:1px;background:var(--bor);}
+/* ASSIGNMENT CARD */
+.ascard{background:var(--bg);border:1px solid var(--bor);padding:.65rem .85rem;display:flex;flex-direction:column;gap:.5rem;position:relative;margin-bottom:.45rem;}
+.ascard.cur{border-color:#1a6b3c;}
+.asrm{position:absolute;top:.4rem;right:.4rem;width:20px;height:20px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--bor);color:var(--td);cursor:pointer;font-size:.6rem;}
+.asrm:hover{border-color:var(--red);color:var(--red);}
+.asbadge{font-family:'IBM Plex Mono',monospace;font-size:.54rem;padding:.06rem .28rem;border:1px solid var(--grn);color:var(--gl2);display:inline-block;}
+/* REQ CARD */
+.rcard{background:var(--bg);border:1px solid var(--bor);padding:.8rem;display:flex;flex-direction:column;gap:.6rem;margin-bottom:.45rem;}
+.rcard-hd{display:flex;align-items:center;justify-content:space-between;}
+.rcard-t{font-family:'IBM Plex Mono',monospace;font-size:.61rem;letter-spacing:.07em;text-transform:uppercase;color:var(--tm);}
+.rrm{width:20px;height:20px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--bor);color:var(--td);cursor:pointer;font-size:.6rem;flex-shrink:0;}
+.rrm:hover{border-color:var(--red);color:var(--red);}
+.vbadge{font-family:'IBM Plex Mono',monospace;font-size:.57rem;padding:.1rem .33rem;border:1px solid var(--bor);}
+.vbadge.vencido{border-color:var(--red);color:var(--red);}
+.vbadge.urgente{border-color:var(--org);color:var(--org);}
+.vbadge.proximo{border-color:var(--yel);color:var(--yel);}
+.vbadge.ok{border-color:var(--grn);color:var(--gl2);}
+.vbadge.pending{color:var(--td);}
+.vdisp{font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--gold);margin-top:.2rem;}
+/* PDF */
+.pdrop{border:2px dashed var(--bor2);padding:1.1rem;text-align:center;cursor:pointer;background:var(--bg);position:relative;transition:all .16s;}
+.pdrop:hover{border-color:var(--blu);}
+.pdrop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.bpv{display:inline-flex;align-items:center;gap:.32rem;padding:.38rem .7rem;background:rgba(41,128,185,.1);border:1px solid var(--blu);color:var(--bl2);font-family:'IBM Plex Mono',monospace;font-size:.61rem;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;}
+.bpv:hover{background:rgba(41,128,185,.2);}
+.pstat{font-family:'IBM Plex Mono',monospace;font-size:.61rem;padding:.36rem .65rem;border:1px solid var(--bor);color:var(--td);display:flex;align-items:center;gap:.42rem;}
+.pstat.proc{border-color:var(--blu);color:var(--bl2);}
+.pstat.rdy{border-color:var(--grn);color:var(--gl2);}
+.pstat.err{border-color:var(--red);color:var(--red);}
+/* DETAIL PANEL */
+.dov{position:fixed;inset:0;background:rgba(0,0,0,.58);z-index:150;display:none;justify-content:flex-end;}
+.dov.on{display:flex;}
+.dpanel{width:540px;max-width:100vw;background:var(--sur);border-left:1px solid var(--bor2);height:100%;overflow-y:auto;}
+.dhd{padding:1.2rem;border-bottom:1px solid var(--bor);display:flex;align-items:flex-start;justify-content:space-between;position:sticky;top:0;background:var(--sur);z-index:1;}
+.dbody{padding:1.2rem;display:flex;flex-direction:column;gap:.75rem;}
+.df{display:flex;flex-direction:column;gap:.18rem;}
+.dl{font-family:'IBM Plex Mono',monospace;font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;color:var(--td);}
+.dv{font-size:.78rem;color:var(--tx);line-height:1.5;}
+/* REPORTS */
+.kgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--bor);border:1px solid var(--bor);}
+.kc2{background:var(--sur);padding:.72rem;text-align:center;}
+.bwrap{display:flex;flex-direction:column;gap:.33rem;}
+.brow{display:flex;align-items:center;gap:.45rem;}
+.blbl{font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--td);width:100px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;}
+.btrk{flex:1;background:var(--sur2);height:12px;position:relative;overflow:hidden;}
+.bfill{height:100%;position:absolute;left:0;top:0;transition:width .5s;}
+.bval{font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--tm);width:24px;text-align:right;}
+/* SOLICITUD STATUS */
+.p-pendiente{border-color:var(--yel);color:var(--yel);}
+.p-en-proceso{border-color:var(--blu);color:var(--bl2);}
+.p-atendida{border-color:var(--grn);color:var(--gl2);}
+.p-cancelada{border-color:var(--td);color:var(--td);}
+/* AUDIT */
+.arow{display:flex;align-items:flex-start;gap:.6rem;padding:.52rem .68rem;border-bottom:1px solid var(--bor);cursor:pointer;transition:background .1s;}
+.arow:last-child{border-bottom:none;}
+.arow:hover{background:var(--sur2);}
+.arow.sel{background:rgba(201,168,76,.06);}
+.ats{font-family:'IBM Plex Mono',monospace;font-size:.56rem;color:var(--td);white-space:nowrap;width:120px;flex-shrink:0;}
+.auser{font-family:'IBM Plex Mono',monospace;font-size:.56rem;color:var(--bl2);width:80px;flex-shrink:0;}
+.aact{flex:1;font-size:.71rem;}
+.aact strong{color:var(--tx);}
+/* NOTIFICATION */
+.notif-item{display:flex;align-items:flex-start;gap:.65rem;padding:.85rem 1.1rem;border-bottom:1px solid var(--bor);cursor:pointer;transition:background .12s;}
+.notif-item:hover{background:var(--sur2);}
+.notif-item.unread{background:rgba(201,168,76,.05);}
+.ndot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+/* SEARCH RESULTS */
+.search-results{border:1px solid var(--bor);background:var(--bg);max-height:140px;overflow-y:auto;}
+.search-item{padding:.32rem .6rem;border-bottom:1px solid var(--bor);cursor:pointer;transition:background .12s;}
+.search-item:hover{background:var(--sur2);}
+.search-item:last-child{border-bottom:none;}
+/* MISC */
+.empty{padding:3rem 2rem;text-align:center;}
+.emptyi{font-size:1.8rem;margin-bottom:.65rem;opacity:.3;}
+.emptyt{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--td);letter-spacing:.08em;text-transform:uppercase;}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;}
+.pgtitle{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--tx);}
+.pgtitle span{color:var(--gold);}
+.sinput{flex:1;background:var(--sur);border:1px solid var(--bor);color:var(--tx);padding:.48rem .85rem;font-family:'IBM Plex Sans',sans-serif;font-size:.78rem;outline:none;transition:border-color .13s;}
+.sinput:focus{border-color:var(--gd);}
+.sinput::placeholder{color:var(--td);}
+.bicon{width:25px;height:25px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--bor);color:var(--td);cursor:pointer;transition:all .11s;font-size:.7rem;}
+.bicon:hover{border-color:var(--gd);color:var(--gold);}
+.bicon.d:hover{border-color:var(--red);color:var(--red);}
+.cprev{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--gold);background:var(--bg);border:1px solid var(--bor);padding:.52rem .65rem;word-break:break-all;}
+.cerr{font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--red);background:rgba(192,57,43,.07);border:1px solid var(--rd);padding:.3rem .55rem;display:none;}
+.cerr.on{display:block;}
+.addf{display:flex;align-items:center;gap:.42rem;background:transparent;border:1px dashed var(--bor2);color:var(--td);font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.07em;text-transform:uppercase;padding:.42rem .65rem;cursor:pointer;transition:all .12s;width:100%;}
+.addf:hover{border-color:var(--gd);color:var(--gold);}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--bor2);}
+#toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--sur2);border:1px solid var(--gd);color:var(--gl);font-family:'IBM Plex Mono',monospace;font-size:.67rem;padding:.6rem 1rem;z-index:999;transform:translateY(16px);opacity:0;transition:all .2s;max-width:340px;line-height:1.5;pointer-events:none;display:none;}
+#toast.on{display:block;transform:translateY(0);opacity:1;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid rgba(90,176,232,.3);border-top-color:var(--bl2);border-radius:50%;animation:spin .6s linear infinite;}
+</style>
+</head>
+<body>
+<div id="syncBar"></div>
+<div id="toast"></div>
+
+<!-- LOGIN -->
+<div id="loginPage">
+  <div class="lbox">
+    <div class="llogo">DRPA · Xalapa</div>
+    <div class="lsub">H. Ayuntamiento de Xalapa · Firebase</div>
+    <div id="lerr" class="lerr"></div>
+    <div class="fld" style="margin-bottom:.62rem;"><label class="flbl">Correo electrónico</label>
+      <input class="fi" id="lu" type="email" placeholder="correo@ejemplo.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="fld" style="margin-bottom:1.1rem;"><label class="flbl">Contraseña</label>
+      <input class="fi" type="password" id="lp" placeholder="••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btnP" id="loginBtn" onclick="doLogin()" style="width:100%;justify-content:center;">Iniciar Sesión</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none;">
+  <div id="appHeader">
+    <div class="huser">
+      <span id="hName">—</span>
+      <span id="hRole" class="rchip">—</span>
+      <div class="cloud"><div class="cdot" id="cdot"></div><span id="cstatus">Firebase</span></div>
+    </div>
+    <div class="hbtns">
+      <button class="btnS" id="btnNotif" onclick="openNotif()" style="font-size:.59rem;padding:.28rem .55rem;position:relative;display:none;">
+        🔔<span id="notifCnt" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:.45rem;padding:.05rem .3rem;border-radius:999px;font-family:'IBM Plex Mono',monospace;min-width:14px;text-align:center;">0</span>
+      </button>
+      <button class="btnS" id="btnUsers" onclick="openUsers()" style="font-size:.59rem;padding:.28rem .55rem;display:none;">👤 Usuarios</button>
+      <button class="btnS" onclick="doLogout()" style="font-size:.59rem;padding:.28rem .55rem;color:var(--red);border-color:var(--rd);">Salir</button>
+    </div>
+  </div>
+  <header>
+    <div class="hinner">
+      <div><span class="htitle">DRPA · Xalapa</span><span class="hsub">Gestión de Expedientes</span></div>
+      <div class="hright">
+        <button class="btnS" id="btnAddT" onclick="openModal('mTipo')" style="font-size:.59rem;padding:.32rem .62rem;display:none;">+ Tipo</button>
+      </div>
+    </div>
+  </header>
+  <div class="navwrap">
+    <nav>
+      <button class="ntab on" id="nt-exp" onclick="goSec('exp')">Expedientes</button>
+      <button class="ntab" id="nt-rep" onclick="goSec('rep')">Reportes</button>
+      <button class="ntab" id="nt-carga" onclick="goSec('carga')">Carga de Trabajo</button>
+      <button class="ntab" id="nt-sol" onclick="goSec('sol')">Solicitudes</button>
+      <button class="ntab" id="nt-memo" onclick="goSec('memo')">Memorándums</button>
+      <button class="ntab" id="nt-aud" onclick="goSec('aud')" style="display:none;">Auditoría</button>
+      <button class="ntab" id="nt-bkp" onclick="goSec('bkp')">Respaldo</button>
+    </nav>
+  </div>
+
+  <!-- EXPEDIENTES -->
+  <div class="nsec on" id="sec-exp">
+    <div class="layout">
+      <aside class="sb">
+        <div class="card">
+          <div class="card-hd"><span class="card-hd-t">Tipos de Documento</span><span class="badge" id="cntT">0</span></div>
+          <div class="tlist" id="tlist"></div>
+          <button class="addtbtn" id="btnAddTsb" onclick="openModal('mTipo')" style="display:none;">+ Agregar tipo</button>
+        </div>
+        <div class="kgrid2">
+          <div class="kc"><span class="kn" id="sTotal">0</span><span class="kl">Total</span></div>
+          <div class="kc"><span class="kn" id="sTipos">0</span><span class="kl">Tipos</span></div>
+          <div class="kc"><span class="kn" id="sAct" style="color:var(--gl2)">0</span><span class="kl">Activos</span></div>
+          <div class="kc"><span class="kn" id="sVenc" style="color:var(--red)">0</span><span class="kl">Por vencer</span></div>
+        </div>
+      </aside>
+      <main style="display:flex;flex-direction:column;gap:1rem;">
+        <div class="topbar">
+          <h1 class="pgtitle">Gestión de <span>Expedientes</span></h1>
+          <button class="btnP" id="btnNew" onclick="openExpModal()" style="display:none;">+ Nuevo Expediente</button>
+        </div>
+        <div style="display:flex;gap:.45rem;">
+          <input class="sinput" id="qinput" placeholder="Buscar por código, promovente, abogado…" oninput="renderTable()">
+          <button class="btnS" onclick="ftipo=null;renderSb();renderTable()">Todos</button>
+        </div>
+        <div class="twrap">
+          <div class="throw" style="grid-template-columns:1.5fr .9fr 1fr .45fr .7fr .7fr .55fr 70px;min-width:740px;">
+            <div class="th">Código</div><div class="th">Tipo</div><div class="th">Promovente</div>
+            <div class="th">Fojas</div><div class="th">Estatus</div><div class="th">Vencimiento</div>
+            <div class="th">PDF</div><div class="th" style="text-align:right">Acc.</div>
+          </div>
+          <div id="tbody"><div class="empty"><div class="emptyi">⏳</div><div class="emptyt">Cargando…</div></div></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- REPORTES -->
+  <div class="nsec" id="sec-rep">
+    <div style="max-width:1500px;margin:0 auto;padding:0 2rem 2rem;">
+      <div class="topbar" style="margin-bottom:1rem;">
+        <h1 class="pgtitle">Reportes y <span>Estadísticas</span></h1>
+        <div style="display:flex;gap:.42rem;">
+          <button class="btnS" onclick="rptPDF()" style="font-size:.6rem;">📄 PDF</button>
+          <button class="btnS" onclick="rptCSV()" style="font-size:.6rem;">📊 CSV</button>
+        </div>
+      </div>
+      <div id="rKpis" class="kgrid" style="margin-bottom:1.1rem;"></div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;padding:.72rem;background:var(--sur);border:1px solid var(--bor);margin-bottom:1rem;">
+        <select class="fi" id="rfT" onchange="renderRpt()" style="width:auto;font-size:.62rem;padding:.35rem .55rem;"><option value="">Todos los tipos</option></select>
+        <select class="fi" id="rfE" onchange="renderRpt()" style="width:auto;font-size:.62rem;padding:.35rem .55rem;">
+          <option value="">Todos los estatus</option>
+          <option value="activo">Activo</option><option value="en-tramite">En Trámite</option>
+          <option value="suspendido">Suspendido</option><option value="concluido">Concluido</option>
+          <option value="sobreseido">Sobreseído</option>
+        </select>
+        <select class="fi" id="rfA" onchange="renderRpt()" style="width:auto;font-size:.62rem;padding:.35rem .55rem;"><option value="">Todos los abogados</option></select>
+        <button class="btnS" onclick="document.querySelectorAll('#rfT,#rfE,#rfA').forEach(s=>s.value='');renderRpt();" style="font-size:.6rem;padding:.3rem .55rem;">✕</button>
+      </div>
+      <div id="rCharts" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1rem;"></div>
+      <div class="twrap"><table id="rTable" style="width:100%;border-collapse:collapse;"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- CARGA DE TRABAJO -->
+  <div class="nsec" id="sec-carga">
+    <div style="max-width:1500px;margin:0 auto;padding:0 2rem 2rem;">
+      <div class="topbar" style="margin-bottom:1rem;">
+        <h1 class="pgtitle">Carga de <span>Trabajo</span></h1>
+        <button class="btnS" onclick="expCargaCSV()" style="font-size:.6rem;">📊 Exportar CSV</button>
+      </div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;padding:.72rem;background:var(--sur);border:1px solid var(--bor);margin-bottom:1rem;">
+        <select class="fi" id="carga-abog" onchange="renderCarga()" style="width:auto;font-size:.62rem;padding:.35rem .55rem;"><option value="">Todos los abogados</option></select>
+        <select class="fi" id="carga-est" onchange="renderCarga()" style="width:auto;font-size:.62rem;padding:.35rem .55rem;">
+          <option value="">Todos los estatus</option>
+          <option value="activo">Activo</option><option value="en-tramite">En Trámite</option>
+          <option value="suspendido">Suspendido</option><option value="concluido">Concluido</option>
+        </select>
+        <button class="btnS" onclick="G('carga-abog').value='';G('carga-est').value='';renderCarga();" style="font-size:.6rem;padding:.3rem .55rem;">✕</button>
+      </div>
+      <div id="cargaKpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--bor);border:1px solid var(--bor);margin-bottom:1rem;"></div>
+      <div id="cargaCharts" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;"></div>
+      <div id="cargaDetail"></div>
+    </div>
+  </div>
+
+  <!-- SOLICITUDES -->
+  <div class="nsec" id="sec-sol">
+    <div style="max-width:1500px;margin:0 auto;padding:0 2rem 2rem;">
+      <div class="topbar" style="margin-bottom:1rem;">
+        <h1 class="pgtitle">Solicitudes <span>Ciudadanas</span></h1>
+        <button class="btnP" id="btnNuevaSol" onclick="openSolModal()" style="display:none;">+ Nueva Solicitud</button>
+      </div>
+      <div style="display:flex;gap:.45rem;margin-bottom:1rem;">
+        <input class="sinput" id="solSearch" placeholder="Buscar por folio, solicitante, asunto…" oninput="renderSolTable()">
+      </div>
+      <div class="twrap">
+        <div class="throw" style="grid-template-columns:1fr 1fr 1.5fr .9fr .9fr .8fr 70px;min-width:700px;">
+          <div class="th">Folio DRPA</div><div class="th">Folio DDU</div><div class="th">Solicitante</div>
+          <div class="th">Fecha</div><div class="th">Designado</div><div class="th">Estatus</div>
+          <div class="th" style="text-align:right">Acc.</div>
+        </div>
+        <div id="solBody"><div class="empty"><div class="emptyi">📋</div><div class="emptyt">Sin solicitudes</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEMORÁNDUMS -->
+  <div class="nsec" id="sec-memo">
+    <div style="max-width:1500px;margin:0 auto;padding:0 2rem 2rem;">
+      <div class="topbar" style="margin-bottom:1rem;">
+        <h1 class="pgtitle">Memorándums <span>Internos</span></h1>
+        <button class="btnP" id="btnNuevoMemo" onclick="openMemoModal()" style="display:none;">+ Nuevo Memorándum</button>
+      </div>
+      <div style="display:flex;border-bottom:1px solid var(--bor);margin-bottom:1rem;">
+        <button class="ntab on" id="mt-rec" onclick="memoTab='rec';G('mt-rec').classList.add('on');G('mt-env').classList.remove('on');renderMemoTable()">📥 Recibidos</button>
+        <button class="ntab" id="mt-env" onclick="memoTab='env';G('mt-env').classList.add('on');G('mt-rec').classList.remove('on');renderMemoTable()">📤 Enviados</button>
+      </div>
+      <div style="display:flex;gap:.45rem;margin-bottom:1rem;">
+        <input class="sinput" id="memoSearch" placeholder="Buscar por número, asunto, remitente…" oninput="renderMemoTable()">
+      </div>
+      <div class="twrap">
+        <div class="throw" style="grid-template-columns:.9fr 1.1fr 1.5fr .9fr .9fr 70px;min-width:680px;">
+          <div class="th">No. Memorándum</div><div class="th">Remitente/Destinatario</div>
+          <div class="th">Asunto</div><div class="th">Fecha</div><div class="th">PDF</div>
+          <div class="th" style="text-align:right">Acc.</div>
+        </div>
+        <div id="memoBody"><div class="empty"><div class="emptyi">📝</div><div class="emptyt">Sin memorándums</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUDITORÍA -->
+  <div class="nsec" id="sec-aud">
+    <div style="max-width:1500px;margin:0 auto;padding:0 2rem 2rem;">
+      <div class="topbar" style="margin-bottom:1rem;">
+        <h1 class="pgtitle">Bitácora de <span>Auditoría</span></h1>
+        <div style="display:flex;gap:.42rem;">
+          <button class="btnS" onclick="expAuditLog()" style="font-size:.6rem;">📄 Exportar</button>
+          <button class="btnS" id="btnSelAll" onclick="audSelAll()" style="font-size:.6rem;display:none;">☑ Sel. todos</button>
+          <button class="btnD" id="btnDelSel" onclick="audDelSel()" style="font-size:.6rem;display:none;">🗑 Eliminar sel.</button>
+          <button class="btnD" id="btnClrAud" onclick="audClearAll()" style="font-size:.6rem;display:none;">🗑 Limpiar todo</button>
+        </div>
+      </div>
+      <div id="audList" style="border:1px solid var(--bor);background:var(--sur);"></div>
+    </div>
+  </div>
+
+  <!-- RESPALDO -->
+  <div class="nsec" id="sec-bkp">
+    <div style="max-width:660px;margin:0 auto;padding:0 2rem 2rem;">
+      <h1 class="pgtitle" style="margin-bottom:1.1rem;">Respaldo y <span>Portabilidad</span></h1>
+      <div class="card" style="padding:.85rem;display:flex;flex-direction:column;gap:.55rem;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tm);">☁ Firebase (Google Cloud) · Guardado automático</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:.58rem;color:var(--td);line-height:1.7;">Todos los datos se guardan automáticamente en Firebase. Usa los botones abajo para respaldo local o importar datos.</div>
+        <hr style="border:none;border-top:1px solid var(--bor);">
+        <button class="btnS" onclick="expZip()" style="width:100%;text-align:left;">📦 Descargar respaldo ZIP</button>
+        <button class="btnS" onclick="G('impFile').click()" style="width:100%;text-align:left;">📂 Importar respaldo JSON/ZIP</button>
+        <input type="file" id="impFile" accept=".json,.zip" style="display:none" onchange="impBackup(this)">
+        <hr style="border:none;border-top:1px solid var(--bor);">
+        <button class="btnS" onclick="G('impXls').click()" style="width:100%;text-align:left;">📊 Importar desde Excel (.xlsx)</button>
+        <input type="file" id="impXls" accept=".xlsx,.xls" style="display:none" onchange="impExcel(this)">
+        <button class="btnS" onclick="dlPlantilla()" style="width:100%;text-align:left;color:var(--gl2);border-color:var(--grn);">⬇ Descargar plantilla Excel vacía</button>
+        <hr style="border:none;border-top:1px solid var(--bor);">
+        <button class="btnS" onclick="rptCSV()" style="width:100%;text-align:left;">📊 Exportar reporte CSV</button>
+      </div>
+    </div>
+  </div>
+</div><!-- /app -->
+
+<!-- MODAL EXPEDIENTE -->
+<div class="mo" id="mExp">
+  <div class="mbox">
+    <div class="mhd"><span class="mtitle" id="mExpT">Nuevo Expediente</span><button class="mclose" onclick="closeModal('mExp')">✕</button></div>
+    <div class="mbody">
+      <div class="mtabs">
+        <button class="mtab on" id="et0" onclick="eTab(0)">Datos Generales</button>
+        <button class="mtab" id="et1" onclick="eTab(1)">Asignación</button>
+        <button class="mtab" id="et2" onclick="eTab(2)">Requerimientos</button>
+        <button class="mtab" id="et3" onclick="eTab(3)">PDF</button>
+        <button class="mtab" id="et4" onclick="eTab(4)">Anotaciones</button>
+      </div>
+      <div class="mpanel on" id="ep0">
+        <div class="fr">
+          <div class="fld"><label class="flbl">Tipo de Documento</label>
+            <select class="fs" id="eTipo" onchange="onTipoChange()"><option value="">— Seleccionar —</option></select></div>
+          <div class="fld"><label class="flbl">Sección</label><input class="fi" id="eSecc" readonly></div>
+        </div>
+        <div class="fr">
+          <div class="fld"><label class="flbl">Año (2 dígitos)</label><input class="fi" id="eAnio" maxlength="2" value="26" oninput="updCode()"></div>
+          <div class="fld"><label class="flbl">No. de Expediente</label><input class="fi" id="eNum" placeholder="001/2026"></div>
+        </div>
+        <div class="fld">
+          <label class="flbl">Código de Expediente</label>
+          <div class="cprev" id="eCode">—</div>
+          <div id="ceArea" style="display:none;margin-top:.3rem;">
+            <div style="display:flex;gap:.4rem;">
+              <input class="fi" id="ceInp" oninput="chkDupCode()" style="font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--gold);">
+              <button class="btnS" onclick="cancelCE()">✕</button>
+              <button class="btnP" onclick="confirmCE()">✓</button>
+            </div>
+            <div class="cerr" id="ceErr">⚠ Código ya registrado</div>
+          </div>
+          <button onclick="startCE()" style="margin-top:.25rem;font-size:.58rem;padding:.25rem .5rem;background:transparent;border:1px solid var(--bor);color:var(--td);font-family:'IBM Plex Mono',monospace;cursor:pointer;width:fit-content;">✎ Modificar manualmente</button>
+        </div>
+        <div class="fr">
+          <div class="fld"><label class="flbl">Promovente</label><input class="fi" id="eProm" placeholder="Nombre del promovente"></div>
+          <div class="fld"><label class="flbl">Dirección</label><input class="fi" id="eDir" placeholder="Domicilio o referencia"></div>
+        </div>
+        <div class="fr">
+          <div class="fld"><label class="flbl">No. de Fojas</label><input class="fi" id="eFojas" placeholder="Ej. 45" id="eFojas"></div>
+          <div class="fld"><label class="flbl">Estatus</label>
+            <select class="fs" id="eEst">
+              <option value="">— Sin definir —</option>
+              <option value="activo">Activo</option><option value="en-tramite">En Trámite</option>
+              <option value="suspendido">Suspendido</option><option value="concluido">Concluido</option>
+              <option value="sobreseido">Sobreseído</option>
+            </select></div>
+        </div>
+        <div class="fld"><label class="flbl">Contenido del Expediente</label>
+          <textarea class="fta" id="eCont" placeholder="Descripción libre…" style="min-height:68px;"></textarea></div>
+      </div>
+      <div class="mpanel" id="ep1">
+        <div class="secttl">Historial de Asignaciones</div>
+        <div id="asgnCont"></div>
+        <button class="addf" id="btnAddAsgn" onclick="addAsgn()" style="border-color:var(--gd);color:var(--gl);">+ Nueva asignación</button>
+        <div class="fld"><label class="flbl">Observaciones de asignación</label>
+          <textarea class="fta" id="eObs" placeholder="Notas…"></textarea></div>
+      </div>
+      <div class="mpanel" id="ep2">
+        <p style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--td);">Los PDFs de requerimientos se fusionan automáticamente al expediente.</p>
+        <div id="reqCont"></div>
+        <button class="addf" onclick="addReq()" style="border-color:var(--bld);color:var(--bl2);">+ Agregar requerimiento</button>
+      </div>
+      <div class="mpanel" id="ep3">
+        <div class="pdrop" ondragover="ev(event)" ondragleave="G('pdrop').classList.remove('drag')" ondrop="pdDrop(event)">
+          <input type="file" id="pdfInp" accept="application/pdf" multiple onchange="procPdfs(this.files)">
+          <div style="font-size:1.5rem;margin-bottom:.35rem;opacity:.5;">📄</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:.64rem;letter-spacing:.07em;text-transform:uppercase;color:var(--td);">Arrastra PDFs aquí o haz clic</div>
+        </div>
+        <div id="pdfStat"></div>
+        <div id="pdfList"></div>
+        <div id="pdfActs"></div>
+      </div>
+      <div class="mpanel" id="ep4">
+        <div class="fld"><label class="flbl">Pendientes / Por Hacer</label>
+          <textarea class="fta" id="ePend" style="min-height:75px;"></textarea></div>
+        <div class="fld"><label class="flbl">Anotaciones Generales</label>
+          <textarea class="fta" id="eAnot" style="min-height:75px;"></textarea></div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btnS" onclick="closeModal('mExp')">Cancelar</button>
+      <button class="btnP" id="btnSaveExp" onclick="saveExp()">☁ Guardar en Firebase</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TIPO -->
+<div class="mo" id="mTipo">
+  <div class="mbox sm">
+    <div class="mhd"><span class="mtitle">Nuevo Tipo de Documento</span><button class="mclose" onclick="closeModal('mTipo')">✕</button></div>
+    <div class="mbody">
+      <div class="fld"><label class="flbl">Nombre</label><input class="fi" id="tNom" placeholder="Ej. Juicio Laboral"></div>
+      <div class="fld"><label class="flbl">Sección</label><input class="fi" id="tSec" placeholder="Ej. 2C.6"></div>
+      <div class="fld"><label class="flbl">Color</label>
+        <select class="fs" id="tCol">
+          <option value="p-custom">Sin categoría</option>
+          <option value="p-amparo">Verde (Amparo)</option>
+          <option value="p-contencioso">Azul (Contencioso)</option>
+          <option value="p-admin">Naranja (Administrativo)</option>
+          <option value="p-civil">Rojo (Civil)</option>
+        </select></div>
+    </div>
+    <div class="mfoot"><button class="btnS" onclick="closeModal('mTipo')">Cancelar</button><button class="btnP" onclick="saveTipo()">Agregar</button></div>
+  </div>
+</div>
+
+<!-- MODAL USUARIOS -->
+<div class="mo" id="mUsers">
+  <div class="mbox md">
+    <div class="mhd"><span class="mtitle">Gestión de Usuarios</span><button class="mclose" onclick="closeModal('mUsers')">✕</button></div>
+    <div class="mbody">
+      <div class="secttl">Crear nuevo usuario</div>
+      <div class="fr" style="grid-template-columns:1fr 1fr 1fr 1fr;">
+        <div class="fld"><label class="flbl">Email</label><input class="fi" type="email" id="nuEmail" placeholder="correo@ejemplo.com"></div>
+        <div class="fld"><label class="flbl">Nombre</label><input class="fi" id="nuNom" placeholder="Nombre completo"></div>
+        <div class="fld"><label class="flbl">Contraseña</label><input class="fi" type="password" id="nuPass" placeholder="••••••"></div>
+        <div class="fld"><label class="flbl">Rol</label>
+          <select class="fs" id="nuRol">
+            <option value="abogado">Abogado</option><option value="asistente">Asistente</option>
+            <option value="consulta">Consulta</option><option value="master">Master</option>
+          </select></div>
+      </div>
+      <button class="btnP" onclick="createUser()" style="font-size:.63rem;padding:.42rem .8rem;">+ Crear Usuario</button>
+      <div class="secttl">Usuarios registrados</div>
+      <div id="usersList" style="border:1px solid var(--bor);background:var(--bg);"></div>
+    </div>
+    <div class="mfoot"><button class="btnP" onclick="closeModal('mUsers')">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- MODAL PDF VIEWER -->
+<div class="mo" id="mPDF">
+  <div class="mbox" style="max-width:980px;">
+    <div class="mhd">
+      <span class="mtitle" id="pdfTitle">PDF</span>
+      <div style="display:flex;gap:.4rem;align-items:center;">
+        <a id="pdfDL" style="display:inline-flex;align-items:center;gap:.32rem;padding:.38rem .7rem;background:rgba(201,168,76,.08);border:1px solid var(--gd);color:var(--gold);font-family:'IBM Plex Mono',monospace;font-size:.61rem;text-transform:uppercase;cursor:pointer;text-decoration:none;" download="expediente.pdf">⬇ Descargar</a>
+        <button class="mclose" onclick="closePDFV()">✕</button>
+      </div>
+    </div>
+    <iframe id="pdfFrame" style="width:100%;min-height:76vh;border:none;"></iframe>
+  </div>
+</div>
+
+<!-- MODAL SOLICITUD -->
+<div class="mo" id="mSol">
+  <div class="mbox">
+    <div class="mhd"><span class="mtitle" id="mSolT">Nueva Solicitud</span><button class="mclose" onclick="closeModal('mSol')">✕</button></div>
+    <div class="mbody">
+      <div class="mtabs">
+        <button class="mtab on" id="st0" onclick="sTab(0)">Datos Generales</button>
+        <button class="mtab" id="st1" onclick="sTab(1)">Atención y Respuesta</button>
+        <button class="mtab" id="st2" onclick="sTab(2)">PDFs</button>
+      </div>
+      <!-- TAB 0 -->
+      <div class="mpanel on" id="sp0">
+        <div class="fr">
+          <div class="fld"><label class="flbl">Folio DRPA</label><input class="fi" id="s-folioDRPA" placeholder="DRPA-2026-001"></div>
+          <div class="fld"><label class="flbl">Folio DDU</label><input class="fi" id="s-folioDDU" placeholder="DDU-2026-001"></div>
+        </div>
+        <div class="fr">
+          <div class="fld"><label class="flbl">Fecha Recepción (DD / MM / AAAA)</label>
+            <div style="display:flex;gap:.3rem;">
+              <input type="number" class="fi" id="s-fd" placeholder="DD" min="1" max="31" style="width:58px;padding:.5rem .3rem;text-align:center;">
+              <input type="number" class="fi" id="s-fm" placeholder="MM" min="1" max="12" style="width:58px;padding:.5rem .3rem;text-align:center;">
+              <input type="number" class="fi" id="s-fy" placeholder="AAAA" min="2020" max="2099" style="flex:1;padding:.5rem .3rem;text-align:center;">
+            </div></div>
+          <div class="fld"><label class="flbl">Hora (HH / MM)</label>
+            <div style="display:flex;gap:.3rem;">
+              <input type="number" class="fi" id="s-hh" placeholder="HH" min="0" max="23" style="width:68px;padding:.5rem .3rem;text-align:center;">
+              <input type="number" class="fi" id="s-mm" placeholder="MM" min="0" max="59" style="width:68px;padding:.5rem .3rem;text-align:center;">
+            </div></div>
+        </div>
+        <div class="fr">
+          <div class="fld"><label class="flbl">Solicitante / Dependencia</label><input class="fi" id="s-solicitante" placeholder="Nombre o dependencia" oninput="solAutoSearch()"></div>
+          <div class="fld"><label class="flbl">Tipo</label>
+            <select class="fs" id="s-tipo">
+              <option value="ciudadana">Solicitud Ciudadana</option>
+              <option value="dependencia">Solicitud de Dependencia</option>
+              <option value="oficio">Oficio recibido</option>
+              <option value="otro">Otro</option>
+            </select></div>
+        </div>
+        <div class="fld"><label class="flbl">Asunto / Descripción</label>
+          <textarea class="fta" id="s-asunto" style="min-height:75px;" oninput="solAutoSearch()"></textarea></div>
+        <div class="secttl">Coincidencias con Expedientes Existentes</div>
+        <div class="fld">
+          <label class="flbl">Buscar expediente relacionado</label>
+          <input class="fi" id="s-expBuscar" placeholder="Código, promovente…" oninput="solBuscarExp()">
+          <div id="s-expResults" class="search-results" style="display:none;"></div>
+          <div id="s-expVinc" style="display:none;margin-top:.3rem;font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--gl2);"></div>
+        </div>
+      </div>
+      <!-- TAB 1 -->
+      <div class="mpanel" id="sp1">
+        <div class="fr">
+          <div class="fld"><label class="flbl">Designado a</label>
+            <select class="fs" id="s-designado"><option value="">— Sin asignar —</option></select></div>
+          <div class="fld"><label class="flbl">Fecha Designación (DD / MM / AAAA)</label>
+            <div style="display:flex;gap:.3rem;">
+              <input type="number" class="fi" id="s-dfd" placeholder="DD" min="1" max="31" style="width:58px;padding:.5rem .3rem;text-align:center;">
+              <input type="number" class="fi" id="s-dfm" placeholder="MM" min="1" max="12" style="width:58px;padding:.5rem .3rem;text-align:center;">
+              <input type="number" class="fi" id="s-dfy" placeholder="AAAA" min="2020" max="2099" style="flex:1;padding:.5rem .3rem;text-align:center;">
+            </div></div>
+        </div>
+        <div class="fr">
+          <div class="fld"><label class="flbl">Oficio con el que se atiende</label><input class="fi" id="s-ofiAten" placeholder="No. de oficio"></div>
+          <div class="fld"><label class="flbl">Oficio de Respuesta</label><input class="fi" id="s-ofiResp" placeholder="No. de oficio"></div>
+        </div>
+        <div class="fr">
+          <div class="fld"><label class="flbl">Estatus</label>
+            <select class="fs" id="s-est">
+              <option value="pendiente">Pendiente</option><option value="en-proceso">En Proceso</option>
+              <option value="atendida">Atendida</option><option value="cancelada">Cancelada</option>
+            </select></div>
+          <div class="fld"></div>
+        </div>
+        <div class="fld"><label class="flbl">Observaciones</label>
+          <textarea class="fta" id="s-obs" style="min-height:68px;"></textarea></div>
+      </div>
+      <!-- TAB 2 -->
+      <div class="mpanel" id="sp2">
+        <div class="fr">
+          <div class="fld"><label class="flbl">PDF Solicitud recibida</label>
+            <div id="s-pdfSolRow"><button class="btnS" style="font-size:.58rem;" onclick="uplSolPdf('sol')">📎 Subir PDF solicitud</button></div></div>
+          <div class="fld"><label class="flbl">PDF Respuesta emitida</label>
+            <div id="s-pdfRespRow"><button class="btnS" style="font-size:.58rem;" onclick="uplSolPdf('resp')">📎 Subir PDF respuesta</button></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btnS" onclick="closeModal('mSol')">Cancelar</button>
+      <button class="btnP" onclick="saveSol()">Guardar Solicitud</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MEMORÁNDUM -->
+<div class="mo" id="mMemo">
+  <div class="mbox md">
+    <div class="mhd"><span class="mtitle" id="mMemoT">Nuevo Memorándum</span><button class="mclose" onclick="closeModal('mMemo')">✕</button></div>
+    <div class="mbody">
+      <div class="fr">
+        <div class="fld"><label class="flbl">No. Memorándum</label><input class="fi" id="m-num" placeholder="MEM-2026-001"></div>
+        <div class="fld"><label class="flbl">Tipo</label>
+          <select class="fs" id="m-tipo"><option value="recibido">📥 Recibido</option><option value="enviado">📤 Enviado</option></select></div>
+      </div>
+      <div class="fr">
+        <div class="fld"><label class="flbl">Remitente (de quién viene)</label><input class="fi" id="m-remitente" placeholder="Nombre o área"></div>
+        <div class="fld"><label class="flbl">Destinatario (a quién va)</label><input class="fi" id="m-destinatario" placeholder="Nombre o área"></div>
+      </div>
+      <div class="fr">
+        <div class="fld"><label class="flbl">Elaborado por</label>
+          <select class="fs" id="m-elaborado"><option value="">— Seleccionar —</option></select></div>
+        <div class="fld"><label class="flbl">Designado a / Para atención de</label>
+          <select class="fs" id="m-designado"><option value="">— Sin designar —</option></select></div>
+      </div>
+      <div class="fr">
+        <div class="fld"><label class="flbl">Fecha (DD / MM / AAAA)</label>
+          <div style="display:flex;gap:.3rem;">
+            <input type="number" class="fi" id="m-fd" placeholder="DD" min="1" max="31" style="width:58px;padding:.5rem .3rem;text-align:center;">
+            <input type="number" class="fi" id="m-fm" placeholder="MM" min="1" max="12" style="width:58px;padding:.5rem .3rem;text-align:center;">
+            <input type="number" class="fi" id="m-fy" placeholder="AAAA" min="2020" max="2099" style="flex:1;padding:.5rem .3rem;text-align:center;">
+          </div></div>
+        <div class="fld"><label class="flbl">Hora (HH / MM)</label>
+          <div style="display:flex;gap:.3rem;">
+            <input type="number" class="fi" id="m-hh" placeholder="HH" min="0" max="23" style="width:68px;padding:.5rem .3rem;text-align:center;">
+            <input type="number" class="fi" id="m-mm" placeholder="MM" min="0" max="59" style="width:68px;padding:.5rem .3rem;text-align:center;">
+          </div></div>
+      </div>
+      <div class="fld"><label class="flbl">Asunto</label>
+        <textarea class="fta" id="m-asunto" style="min-height:68px;" oninput="memoAutoSearch()"></textarea></div>
+      <div class="secttl">Vinculación con Expediente</div>
+      <div class="fld">
+        <label class="flbl">Buscar expediente relacionado</label>
+        <input class="fi" id="m-expBuscar" placeholder="Código, promovente…" oninput="memoBuscarExp()">
+        <div id="m-expResults" class="search-results" style="display:none;"></div>
+        <div id="m-expVinc" style="display:none;margin-top:.3rem;font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--gl2);"></div>
+      </div>
+      <div class="fld"><label class="flbl">PDF del Memorándum</label>
+        <div id="m-pdfRow"><button class="btnS" style="font-size:.58rem;" onclick="uplMemoPdf()">📎 Subir PDF</button></div></div>
+      <div class="fld"><label class="flbl">Observaciones</label>
+        <textarea class="fta" id="m-obs" style="min-height:60px;"></textarea></div>
+    </div>
+    <div class="mfoot">
+      <button class="btnS" onclick="closeModal('mMemo')">Cancelar</button>
+      <button class="btnP" onclick="saveMemo()">Guardar Memorándum</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOTIFICACIONES -->
+<div class="mo" id="mNotif">
+  <div class="mbox md">
+    <div class="mhd">
+      <span class="mtitle">🔔 Notificaciones</span>
+      <div style="display:flex;gap:.4rem;align-items:center;">
+        <button class="btnS" onclick="notifMarkAll()" style="font-size:.6rem;padding:.3rem .55rem;">✓ Todas leídas</button>
+        <button class="mclose" onclick="closeModal('mNotif')">✕</button>
+      </div>
+    </div>
+    <div id="notifList" style="max-height:65vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- DETAIL PANEL -->
+<div class="dov" id="dov">
+  <div class="dpanel">
+    <div class="dhd">
+      <div><div style="font-family:'IBM Plex Mono',monospace;font-size:.64rem;color:var(--gold);word-break:break-all;" id="dCode"></div>
+        <div style="font-family:'Playfair Display',serif;font-size:.9rem;color:var(--tx);margin-top:.2rem;" id="dTipo"></div></div>
+      <button class="mclose" onclick="closeDet()">✕</button>
+    </div>
+    <div class="dbody" id="dBody"></div>
+  </div>
+</div>
+<script>
+// ═══════════════════════════════════════════════════
+// DRPA v5 — Sistema completo de gestión de expedientes
+// Firebase: Firestore + Auth | Sin Storage (PDFs en chunks)
+// ═══════════════════════════════════════════════════
+
+// ── ESTADO GLOBAL ────────────────────────────────────
+let cu=null, tipos=[], users=[], exps=[], sols=[], memos=[], notifs=[];
+let ftipo=null, editExpId=null, editSolId=null, editMemoId=null;
+let codeManual=false, memoTab='rec';
+let tPdfB=null, tPdfP=0, tPdfF=[];
+let solPdfB={sol:null,resp:null}, solPdfN={sol:'',resp:''};
+let memoPdfB=null, memoPdfN='';
+let solExpVincId=null, solExpVincCode=null;
+let memoExpVincId=null, memoExpVincCode=null;
+let notifUnsub=null;
+let unsubExps=null, unsubTipos=null, unsubSols=null, unsubMemos=null;
+const CHUNK=700*1024;
+
+// ── UTILIDADES ────────────────────────────────────────
+const G=id=>document.getElementById(id);
+const gv=id=>(G(id)||{}).value||'';
+const sv=(id,v)=>{const el=G(id);if(el)el.value=v??'';};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const slug=s=>String(s||'').replace(/[^a-zA-Z0-9\-_]/g,'_').replace(/__+/g,'_').slice(0,60);
+const dlBlob=(blob,name)=>{const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),8000);};
+const canEdit=()=>cu&&['master','abogado','asistente'].includes(cu.rol);
+const isMaster=()=>cu&&cu.rol==='master';
+const ts=()=>new Date().toISOString();
+
+// Toast notification
+let toastT=null;
+function notify(msg,dur=2800){
+  const el=G('toast');
+  el.innerHTML=msg.replace(/\n/g,'<br>');
+  el.classList.add('on');
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>el.classList.remove('on'),dur);
+}
+function syncBar(on){G('syncBar').classList.toggle('on',on);}
+
+// ── FECHAS ────────────────────────────────────────────
+const FF=new Set(['01-01','02-05','03-21','05-01','09-16','11-20','12-25']);
+const FV=new Set(['2025-04-17','2025-04-18','2026-04-02','2026-04-03','2027-03-25','2027-03-26']);
+function isFest(d){const mm=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'),y=d.getFullYear();return FF.has(`${mm}-${dd}`)||FV.has(`${y}-${mm}-${dd}`);}
+function isHabil(d){return d.getDay()!==0&&d.getDay()!==6&&!isFest(d);}
+function addDias(base,n,tipo){let d=new Date(base);d.setHours(0,0,0,0);if(tipo==='naturales'){d.setDate(d.getDate()+n);return d;}let c=0;while(c<n){d.setDate(d.getDate()+1);if(isHabil(d))c++;}return d;}
+function calcVenc(fo,term,tipo){if(!fo||!term)return null;const b=new Date(fo+'T00:00:00');if(isNaN(b))return null;return addDias(b,parseInt(term)||0,tipo||'habiles');}
+function dpv(fv){const h=new Date();h.setHours(0,0,0,0);return Math.round((new Date(fv+'T00:00:00')-h)/86400000);}
+function vc(d){return d<0?'vencido':d<=3?'urgente':d<=7?'proximo':'ok';}
+function vl(d){return d<0?`VENCIDO ${Math.abs(d)}d`:d===0?'HOY':d===1?'MAÑANA':`${d}d`;}
+function fd(s){if(!s)return'—';try{return new Date(s+'T00:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});}catch(e){return s;}}
+function fdt(s){if(!s)return'—';try{return new Date(s).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){return s;}}
+// Build ISO date from DD/MM/AAAA fields
+function buildDate(d,m,y){if(!d||!m||!y||String(y).length<4)return'';return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+// Parse ISO date to DD/MM/AAAA fields
+function parseDate(iso,prefix){if(!iso||iso.length<10)return;const p=iso.split('-');sv(prefix+'-d',parseInt(p[2])||'');sv(prefix+'-m',parseInt(p[1])||'');sv(prefix+'-y',p[0]||'');}
+
+// ── PDF CHUNKS ────────────────────────────────────────
+function pdfToChunks(bytes){const chunks=[];for(let i=0;i<bytes.length;i+=CHUNK){const s=bytes.slice(i,i+CHUNK);chunks.push(btoa(String.fromCharCode(...s)));}return chunks;}
+function chunksToBytes(chunks){const parts=chunks.map(c=>{const b=atob(c);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;});const tot=parts.reduce((s,p)=>s+p.length,0);const r=new Uint8Array(tot);let o=0;parts.forEach(p=>{r.set(p,o);o+=p.length;});return r;}
+async function uploadChunks(path,bytes){
+  const chunks=pdfToChunks(bytes);
+  const colRef=db.collection(path);
+  const old=await colRef.get();
+  if(!old.empty){const b=db.batch();old.docs.forEach(d=>b.delete(d.ref));await b.commit();}
+  for(let i=0;i<chunks.length;i+=5){
+    const b=db.batch();
+    for(let j=i;j<Math.min(i+5,chunks.length);j++)b.set(colRef.doc(String(j).padStart(6,'0')),{idx:j,data:chunks[j]});
+    await b.commit();
+  }
+}
+async function downloadChunks(path){
+  const snap=await db.collection(path).orderBy('idx').get();
+  if(snap.empty)return null;
+  return chunksToBytes(snap.docs.map(d=>d.data().data));
+}
+
+// ── AUTH ──────────────────────────────────────────────
+let clientIP='local';
+fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(d=>clientIP=d.ip).catch(()=>{});
+
+async function doLogin(){
+  const email=gv('lu').trim(),pass=gv('lp');
+  const btn=G('loginBtn');btn.disabled=true;btn.textContent='Conectando…';
+  G('lerr').style.display='none';
+  try{
+    const cred=await auth.signInWithEmailAndPassword(email,pass);
+    await initSession(cred.user);
+  }catch(e){
+    G('lerr').style.display='block';
+    G('lerr').textContent=e.code==='auth/invalid-credential'||e.code==='auth/user-not-found'||e.code==='auth/wrong-password'?'Correo o contraseña incorrectos':'Error: '+e.message;
+  }
+  btn.disabled=false;btn.textContent='Iniciar Sesión';
+}
+
+async function initSession(user){
+  // Load user profile with retries
+  let profile=null;
+  for(let i=0;i<3&&!profile;i++){
+    try{const s=await db.collection('usuarios').doc(user.uid).get();if(s.exists)profile=s.data();}
+    catch(e){await new Promise(r=>setTimeout(r,800));}
+  }
+  if(!profile){
+    G('lerr').style.display='block';
+    G('lerr').textContent=`Perfil no encontrado. UID: ${user.uid}`;
+    await auth.signOut();return;
+  }
+  cu={uid:user.uid,email:user.email,rol:profile.rol||'consulta',nombre:profile.nombre||user.email};
+  // Show app
+  G('loginPage').style.display='none';
+  G('appHeader').style.display='flex';
+  G('app').style.display='block';
+  G('hName').textContent=cu.nombre;
+  const rc=G('hRole');rc.className='rchip rc-'+cu.rol;rc.textContent=cu.rol.toUpperCase();
+  G('cdot').style.background='var(--gl2)';G('cstatus').textContent='Firebase · En línea';
+  applyRole();
+  startListeners();
+  await logAudit('LOGIN','Sistema','Inicio de sesión',null,null);
+  notify(`Bienvenido, ${cu.nombre}`);
+}
+
+async function doLogout(){
+  await logAudit('LOGOUT','Sistema','Cierre de sesión',null,null);
+  [unsubExps,unsubTipos,unsubSols,unsubMemos,notifUnsub].forEach(u=>{try{if(u)u();}catch(e){}});
+  await auth.signOut();
+  cu=null;exps=[];tipos=[];sols=[];memos=[];notifs=[];
+  G('loginPage').style.display='flex';G('appHeader').style.display='none';G('app').style.display='none';
+  sv('lu','');sv('lp','');G('lerr').style.display='none';
+}
+
+function applyRole(){
+  const m=isMaster(),c=canEdit();
+  // Master-only
+  ['btnUsers','btnSelAll','btnDelSel','btnClrAud'].forEach(id=>{const el=G(id);if(el)el.style.display=m?'inline-flex':'none';});
+  G('nt-aud').style.display=m?'':'none';
+  // Edit permissions
+  ['btnNew','btnAddT','btnAddTsb','btnNuevaSol','btnNuevoMemo'].forEach(id=>{const el=G(id);if(el)el.style.display=c?'':'none';});
+  if(G('btnAddAsgn'))G('btnAddAsgn').style.display=c?'':'none';
+  // Notification bell (all users)
+  G('btnNotif').style.display='inline-flex';
+}
+
+// ── FIRESTORE LISTENERS ───────────────────────────────
+function startListeners(){
+  unsubTipos=db.collection('tipos').onSnapshot(snap=>{
+    if(snap.empty){initDefaultTipos();}
+    else{tipos=snap.docs.map(d=>({id:d.id,...d.data()}));renderSb();renderRptFilters();}
+  });
+  unsubExps=db.collection('expedientes').onSnapshot(snap=>{
+    exps=snap.docs.map(d=>({id:d.id,...d.data(),pdfBytes:null}));
+    renderSb();renderTable();
+  },e=>notify('Error sync expedientes: '+e.message,4000));
+  unsubSols=db.collection('solicitudes').orderBy('createdAt','desc').onSnapshot(snap=>{
+    sols=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(G('sec-sol').classList.contains('on'))renderSolTable();
+  },()=>{});
+  unsubMemos=db.collection('memorandums').orderBy('createdAt','desc').onSnapshot(snap=>{
+    memos=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(G('sec-memo').classList.contains('on'))renderMemoTable();
+  },()=>{});
+  // Notifications
+  notifUnsub=db.collection('notificaciones').where('paraUid','==',cu.uid)
+    .orderBy('ts','desc').limit(50)
+    .onSnapshot(snap=>{
+      notifs=snap.docs.map(d=>({id:d.id,...d.data(),ts:d.data().ts?.toDate?.()?.toISOString()||''}));
+      const unread=notifs.filter(n=>!n.leida).length;
+      const badge=G('notifCnt');
+      if(badge){badge.textContent=unread>9?'9+':String(unread);badge.style.display=unread>0?'block':'none';}
+    },()=>{});
+  // Load users
+  loadUsers();
+}
+
+async function initDefaultTipos(){
+  const defs=[
+    {id:'amparo',nombre:'Juicio de Amparo',seccion:'2C.1',color:'p-amparo'},
+    {id:'contencioso',nombre:'Juicio Contencioso Administrativo',seccion:'2C.5',color:'p-contencioso'},
+    {id:'admin',nombre:'Procedimiento Administrativo',seccion:'2C.4',color:'p-admin'},
+    {id:'civil',nombre:'Juicio Ordinario Civil',seccion:'2C.5',color:'p-civil'},
+  ];
+  const b=db.batch();defs.forEach(t=>b.set(db.collection('tipos').doc(t.id),t));await b.commit();
+}
+
+// Auto-login on refresh
+auth.onAuthStateChanged(async user=>{
+  if(user&&!cu){await initSession(user);}
+});
+
+// ── AUDIT ──────────────────────────────────────────────
+async function logAudit(action,entity,desc,before,after){
+  try{await db.collection('auditoria').add({
+    ts:firebase.firestore.FieldValue.serverTimestamp(),
+    action,entity,desc,
+    user:cu?cu.email:'?',userName:cu?cu.nombre:'?',userRole:cu?cu.rol:'—',
+    ip:clientIP,
+    before:before?JSON.stringify(before).slice(0,400):null,
+    after:after?JSON.stringify(after).slice(0,400):null
+  });}catch(e){console.warn('audit:',e);}
+}
+
+// ── NAV ───────────────────────────────────────────────
+function goSec(s){
+  ['exp','rep','carga','sol','memo','aud','bkp'].forEach(id=>{
+    const sec=G('sec-'+id);if(sec)sec.classList.toggle('on',id===s);
+    const nt=G('nt-'+id);if(nt)nt.classList.toggle('on',id===s);
+  });
+  if(s==='rep'){renderRptFilters();renderRpt();}
+  if(s==='carga'){renderCargaFilters();renderCarga();}
+  if(s==='aud')renderAudit();
+  if(s==='sol'){popUserSelects(['s-designado']);renderSolTable();}
+  if(s==='memo'){popUserSelects(['m-elaborado','m-designado']);renderMemoTable();}
+}
+
+// ── MODALES ───────────────────────────────────────────
+function openModal(id){G(id).classList.add('on');}
+function closeModal(id){G(id).classList.remove('on');}
+function closePDFV(){G('mPDF').classList.remove('on');G('pdfFrame').src='about:blank';}
+function ev(e){e.preventDefault();G('pdrop').classList.add('drag');}
+
+// ── SIDEBAR ───────────────────────────────────────────
+function renderSb(){
+  const list=G('tlist');list.innerHTML='';
+  const all=document.createElement('div');
+  all.className='ti'+(ftipo===null?' on':'');
+  all.onclick=()=>{ftipo=null;renderSb();renderTable();};
+  all.innerHTML=`<div class="tidot"></div><span class="tiname">Todos</span><span class="tisec">${exps.length}</span>`;
+  list.appendChild(all);
+  [...tipos].sort((a,b)=>a.seccion.localeCompare(b.seccion)).forEach(t=>{
+    const cnt=exps.filter(e=>e.tipoId===t.id).length;
+    const div=document.createElement('div');
+    div.className='ti'+(ftipo===t.id?' on':'');
+    div.onclick=()=>{ftipo=t.id;renderSb();renderTable();};
+    div.innerHTML=`<div class="tidot"></div><span class="tiname">${esc(t.nombre)}</span><span class="tisec">${t.seccion}·${cnt}</span>`;
+    list.appendChild(div);
+  });
+  G('cntT').textContent=tipos.length;G('sTipos').textContent=tipos.length;
+  G('sTotal').textContent=exps.length;
+  G('sAct').textContent=exps.filter(e=>e.estatus==='activo').length;
+  let vT=0;exps.forEach(e=>(e.reqs||[]).forEach(r=>{if(r.venc&&dpv(r.venc)<=7)vT++;}));
+  G('sVenc').textContent=vT;
+}
+
+// ── HELPERS ───────────────────────────────────────────
+const SL={'activo':'Activo','en-tramite':'En Trámite','suspendido':'Suspendido','concluido':'Concluido','sobreseido':'Sobreseído'};
+const SC={'activo':'p-activo','en-tramite':'p-tramite','suspendido':'p-suspendido','concluido':'p-concluido','sobreseido':'p-sobreseido'};
+function curAsgn(e){const a=(e.asgns||[]).filter(x=>!x.devDate);return a.length?a[a.length-1]:null;}
+function minVenc(e){let m=null;(e.reqs||[]).forEach(r=>{if(r.venc&&(!m||r.venc<m))m=r.venc;});return m;}
+function popUserSelects(ids){
+  ids.forEach(selId=>{
+    const sel=G(selId);if(!sel)return;
+    const cur=sel.value;
+    sel.innerHTML='<option value="">— Sin asignar —</option>';
+    users.filter(u=>['master','abogado','asistente'].includes(u.rol)).forEach(u=>{
+      const o=document.createElement('option');o.value=u.uid;o.textContent=u.nombre||u.email;
+      if(u.uid===cur)o.selected=true;sel.appendChild(o);
+    });
+  });
+}
+function userOpts(selVal=''){
+  return'<option value="">— Seleccionar —</option>'+users.filter(u=>['master','abogado','asistente'].includes(u.rol)).map(u=>`<option value="${esc(u.uid)}" ${u.uid===selVal?'selected':''}>${esc(u.nombre||u.email)}</option>`).join('');
+}
+
+// ── TABLA EXPEDIENTES ──────────────────────────────────
+function renderTable(){
+  const body=G('tbody');
+  const q=(gv('qinput')||'').toLowerCase();
+  let list=exps.filter(e=>{
+    if(ftipo&&e.tipoId!==ftipo)return false;
+    if(!q)return true;
+    return[e.code,e.promovente,e.contenido,e.tipoNombre,e.numExp,...(e.asgns||[]).map(a=>a.abogNom)].some(v=>v&&v.toLowerCase().includes(q));
+  });
+  if(!list.length){body.innerHTML='<div class="empty"><div class="emptyi">📁</div><div class="emptyt">Sin resultados</div></div>';return;}
+  const stH=e=>e.estatus?`<span class="pill ${SC[e.estatus]||''}">${SL[e.estatus]||e.estatus}</span>`:'<span style="color:var(--td);font-size:.65rem">—</span>';
+  const vH=e=>{const vm=minVenc(e);return vm?`<span class="pill v-${vc(dpv(vm))}">${vl(dpv(vm))}</span>`:'<span style="color:var(--td);font-size:.65rem">—</span>';};
+  const pH=e=>e.hasPdf?`<span style="font-family:'IBM Plex Mono',monospace;font-size:.53rem;padding:.08rem .3rem;border:1px solid var(--blu);color:var(--bl2);cursor:pointer;" onclick="event.stopPropagation();viewExpPdf('${e.id}')">📄${e.pdfPages||'?'}p</span>`:'<span style="color:var(--td);font-size:.63rem">—</span>';
+  body.innerHTML=list.map(e=>{
+    const tp=tipos.find(t=>t.id===e.tipoId);
+    return`<div class="trow" style="grid-template-columns:1.5fr .9fr 1fr .45fr .7fr .7fr .55fr 70px;min-width:740px;" onclick="openDet('${e.id}')">
+      <div class="tcell mono">${esc(e.code||'—')}<br><span style="color:var(--td);font-size:.53rem">${esc(e.numExp||'')}</span></div>
+      <div class="tcell"><span class="pill ${tp?tp.color:'p-custom'}">${esc(e.tipoNombre||'—')}</span></div>
+      <div class="tcell" style="color:var(--tm);">${esc(e.promovente||e.contenido||'—')}</div>
+      <div class="tcell" style="font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--tm);">${esc(e.fojas||'—')}</div>
+      <div class="tcell">${stH(e)}</div><div class="tcell">${vH(e)}</div><div class="tcell">${pH(e)}</div>
+      <div class="tcell" style="display:flex;gap:.25rem;justify-content:flex-end;" onclick="event.stopPropagation()">
+        ${canEdit()?`<button class="bicon" onclick="openExpEdit('${e.id}')">✎</button>`:''}
+        ${isMaster()?`<button class="bicon d" onclick="delExp('${e.id}')">✕</button>`:''}
+      </div></div>`;
+  }).join('');
+}
+
+// ── CÓDIGO DE EXPEDIENTE ──────────────────────────────
+function nextCorr(tid){
+  const ex=exps.filter(e=>e.tipoId===tid&&e.id!==editExpId);
+  let max=0;ex.forEach(e=>{const m=e.code&&e.code.match(/\/(\d+)\//);if(m)max=Math.max(max,parseInt(m[1]));});
+  return String(max+1).padStart(2,'0');
+}
+function buildCode(){
+  const tid=gv('eTipo'),anio=gv('eAnio');
+  const t=tipos.find(x=>x.id===tid);if(!t)return'—';
+  return`H.Ayuntamiento de Xalapa/DRPA/${t.seccion}/${nextCorr(tid)}/${anio||'??'}`;
+}
+function updCode(){if(!codeManual)G('eCode').textContent=buildCode();}
+function onTipoChange(){const t=tipos.find(x=>x.id===gv('eTipo'));sv('eSecc',t?t.seccion:'');codeManual=false;updCode();}
+function startCE(){codeManual=true;G('ceArea').style.display='block';G('ceInp').value=G('eCode').textContent||'';}
+function cancelCE(){codeManual=false;G('ceArea').style.display='none';G('ceErr').classList.remove('on');updCode();}
+function chkDupCode(){const v=gv('ceInp').trim();const dup=exps.find(e=>e.code===v&&e.id!==editExpId);G('ceErr').classList.toggle('on',!!(dup&&v));}
+function confirmCE(){const v=gv('ceInp').trim();if(!v){notify('Código vacío');return;}if(exps.find(e=>e.code===v&&e.id!==editExpId)){notify('Código duplicado');return;}G('eCode').textContent=v;G('ceArea').style.display='none';}
+
+// ── MODAL EXPEDIENTE ──────────────────────────────────
+function eTab(n){for(let i=0;i<5;i++){G(`et${i}`)&&G(`et${i}`).classList.toggle('on',i===n);G(`ep${i}`)&&G(`ep${i}`).classList.toggle('on',i===n);}}
+function openExpModal(){
+  if(!canEdit()){notify('Sin permisos');return;}
+  editExpId=null;codeManual=false;tPdfB=null;tPdfP=0;tPdfF=[];
+  G('mExpT').textContent='Nuevo Expediente';
+  // Populate tipo select
+  const ts2=G('eTipo');ts2.innerHTML='<option value="">— Seleccionar —</option>';
+  [...tipos].sort((a,b)=>a.seccion.localeCompare(b.seccion)).forEach(t=>{const o=document.createElement('option');o.value=t.id;o.textContent=`${t.nombre} (${t.seccion})`;ts2.appendChild(o);});
+  ['eTipo','eSecc','eFojas','eCont','eEst','eObs','ePend','eAnot','eProm','eDir','eNum'].forEach(id=>sv(id,''));
+  G('eCode').textContent='—';sv('eAnio','26');
+  G('ceArea').style.display='none';G('ceErr').classList.remove('on');
+  G('asgnCont').innerHTML='';asgnIdx=0;
+  G('reqCont').innerHTML='';reqIdx=0;
+  G('pdfStat').innerHTML='';G('pdfList').innerHTML='';G('pdfActs').innerHTML='';G('pdfInp').value='';
+  eTab(0);openModal('mExp');
+}
+
+// ── ASIGNACIONES (DOM estable, no se re-renderiza al escribir) ─────────
+let asgnIdx=0;
+function addAsgn(data){
+  if(!canEdit())return;
+  const id='as-'+(++asgnIdx);
+  const a=data||{abogId:'',abogNom:'',aDate:'',devDate:'',nota:''};
+  const div=document.createElement('div');
+  div.className='ascard'+((!a.devDate)?' cur':'');div.id=id;
+  div.innerHTML=`
+    ${isMaster()?`<button class="asrm" onclick="rmAsgn('${id}')">✕</button>`:''}
+    <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.3rem;">
+      <span class="asbadge as-badge-${id}">${!a.devDate?'EN PODER':'DEVUELTO'}</span>
+    </div>
+    <div class="fr">
+      <div class="fld"><label class="flbl">Abogado / Responsable</label>
+        <select class="fs" id="${id}-abog" onchange="onAsgnAbog('${id}')" ${!canEdit()?'disabled':''}>
+          ${userOpts(a.abogId)}</select></div>
+      <div class="fld"><label class="flbl">Fecha Asignación (DD/MM/AAAA)</label>
+        <div style="display:flex;gap:.28rem;">
+          <input type="number" class="fi" id="${id}-ad" placeholder="DD" min="1" max="31" style="width:52px;padding:.5rem .28rem;text-align:center;" ${!canEdit()?'readonly':''}>
+          <input type="number" class="fi" id="${id}-am" placeholder="MM" min="1" max="12" style="width:52px;padding:.5rem .28rem;text-align:center;" ${!canEdit()?'readonly':''}>
+          <input type="number" class="fi" id="${id}-ay" placeholder="AAAA" min="2020" max="2099" style="flex:1;padding:.5rem .28rem;text-align:center;" ${!canEdit()?'readonly':''}>
+        </div></div>
+    </div>
+    <div class="fr">
+      <div class="fld"><label class="flbl">Fecha Devolución (DD/MM/AAAA)</label>
+        <div style="display:flex;gap:.28rem;">
+          <input type="number" class="fi" id="${id}-dd" placeholder="DD" min="1" max="31" style="width:52px;padding:.5rem .28rem;text-align:center;" onchange="onAsgnDev('${id}')" ${!canEdit()?'readonly':''}>
+          <input type="number" class="fi" id="${id}-dm" placeholder="MM" min="1" max="12" style="width:52px;padding:.5rem .28rem;text-align:center;" onchange="onAsgnDev('${id}')" ${!canEdit()?'readonly':''}>
+          <input type="number" class="fi" id="${id}-dy" placeholder="AAAA" min="2020" max="2099" style="flex:1;padding:.5rem .28rem;text-align:center;" onchange="onAsgnDev('${id}')" ${!canEdit()?'readonly':''}>
+        </div></div>
+      <div class="fld"><label class="flbl">Nota</label>
+        <input type="text" class="fi" id="${id}-nota" value="${esc(a.nota||'')}" placeholder="Motivo…" ${!canEdit()?'readonly':''}></div>
+    </div>`;
+  G('asgnCont').appendChild(div);
+  // Set date fields from data
+  if(data){
+    if(data.aDate)parseDate(data.aDate,id+'-a');
+    if(data.devDate)parseDate(data.devDate,id+'-d');
+  }
+}
+function rmAsgn(id){G(id)?.remove();}
+function onAsgnAbog(id){
+  const abogId=gv(id+'-abog');if(!abogId)return;
+  const u=users.find(x=>x.uid===abogId);const nom=u?u.nombre||u.email:abogId;
+  const conf=exps.find(e=>e.id!==editExpId&&(e.asgns||[]).some(a=>a.abogId===abogId&&!a.devDate));
+  if(conf){
+    const ca=(conf.asgns||[]).find(a=>a.abogId===abogId&&!a.devDate);
+    notify(`🚫 ${nom} tiene asignado:\n${conf.code||conf.id}\nDesde: ${fd(ca?.aDate)}\n\nDebe devolverse antes.`,10000);
+    G(id+'-abog').value='';
+  }
+}
+function onAsgnDev(id){
+  const dvD=gv(id+'-dd'),dvM=gv(id+'-dm'),dvY=gv(id+'-dy');
+  const dev=buildDate(dvD,dvM,dvY);
+  const card=G(id);if(!card)return;
+  card.classList.toggle('cur',!dev);
+  const badge=card.querySelector('.as-badge-'+id);
+  if(badge)badge.textContent=dev?'DEVUELTO':'EN PODER';
+}
+function getAsgns(){
+  return[...G('asgnCont').children].map(card=>{
+    const id=card.id;
+    const abogId=gv(id+'-abog');const u=users.find(x=>x.uid===abogId);
+    return{abogId,abogNom:u?u.nombre||u.email:'',
+      aDate:buildDate(gv(id+'-ad'),gv(id+'-am'),gv(id+'-ay')),
+      devDate:buildDate(gv(id+'-dd'),gv(id+'-dm'),gv(id+'-dy')),
+      nota:gv(id+'-nota')};
+  });
+}
+
+// ── REQUERIMIENTOS (DOM estable) ──────────────────────
+let reqIdx=0;
+function addReq(data){
+  const id='rq-'+(++reqIdx);
+  const r=data||{oficio:'',desc:'',fechaR:'',term:'',tipoT:'habiles',venc:null,abogId:'',abogNom:'',rName:'',sName:''};
+  const idx2=G('reqCont').children.length+1;
+  const div=document.createElement('div');div.className='rcard';div.id=id;
+  const vbHtml=r.venc?`<span class="vbadge ${vc(dpv(r.venc))}">${fd(r.venc)} · ${vl(dpv(r.venc))}</span>`:`<span class="vbadge pending">— fecha + término —</span>`;
+  div.innerHTML=`
+    <div class="rcard-hd">
+      <span class="rcard-t">Requerimiento #${idx2}</span>
+      <div style="display:flex;align-items:center;gap:.3rem;">
+        <span id="${id}-vb">${vbHtml}</span>
+        ${canEdit()?`<button class="rrm" onclick="rmReq('${id}')">✕</button>`:''}
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fld"><label class="flbl">No. de Oficio</label>
+        <input type="text" class="fi" id="${id}-oficio" value="${esc(r.oficio||'')}" placeholder="DRPA/001/2026" ${!canEdit()?'readonly':''}></div>
+      <div class="fld"><label class="flbl">Fecha Recepción (DD/MM/AAAA)</label>
+        <div style="display:flex;gap:.28rem;">
+          <input type="number" class="fi" id="${id}-fd" placeholder="DD" min="1" max="31" style="width:52px;padding:.5rem .28rem;text-align:center;" onchange="recalcVenc('${id}')" ${!canEdit()?'readonly':''}>
+          <input type="number" class="fi" id="${id}-fm" placeholder="MM" min="1" max="12" style="width:52px;padding:.5rem .28rem;text-align:center;" onchange="recalcVenc('${id}')" ${!canEdit()?'readonly':''}>
+          <input type="number" class="fi" id="${id}-fy" placeholder="AAAA" min="2020" max="2099" style="flex:1;padding:.5rem .28rem;text-align:center;" onchange="recalcVenc('${id}')" ${!canEdit()?'readonly':''}>
+        </div></div>
+    </div>
+    <div class="fr" style="grid-template-columns:1fr;">
+      <div class="fld"><label class="flbl">Descripción</label>
+        <textarea class="fta" id="${id}-desc" style="min-height:50px;" ${!canEdit()?'readonly':''}>${esc(r.desc||'')}</textarea></div>
+    </div>
+    <div class="fr" style="grid-template-columns:1fr 1fr 1fr;">
+      <div class="fld"><label class="flbl">Término (días)</label>
+        <input type="number" class="fi" id="${id}-term" value="${r.term||''}" min="1" placeholder="15" onchange="recalcVenc('${id}')" ${!canEdit()?'readonly':''}></div>
+      <div class="fld"><label class="flbl">Tipo de días</label>
+        <select class="fs" id="${id}-tipoT" onchange="recalcVenc('${id}')" ${!canEdit()?'disabled':''}>
+          <option value="habiles" ${(!r.tipoT||r.tipoT==='habiles')?'selected':''}>Hábiles</option>
+          <option value="naturales" ${r.tipoT==='naturales'?'selected':''}>Naturales</option>
+        </select>
+        <div class="vdisp" id="${id}-vdisp">${r.venc?fd(r.venc):'—'}</div></div>
+      <div class="fld"><label class="flbl">Reasignar a</label>
+        <select class="fs" id="${id}-abog" ${!canEdit()?'disabled':''}>
+          ${userOpts(r.abogId||'')}
+        </select></div>
+    </div>
+    <div class="fr">
+      <div class="fld"><label class="flbl">PDF Requerimiento</label>
+        <div id="${id}-rrow">${r.rName?`<button class="bpv" style="font-size:.57rem;" onclick="viewReqPdf('${id}','r')">👁 Ver</button> <span style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--gl2);">✓ ${esc(r.rName.slice(0,22))}</span>`:
+          `<button class="btnS" style="font-size:.57rem;" onclick="uplReqPdf('${id}','r')">📎 Subir PDF req.</button>`}</div></div>
+      <div class="fld"><label class="flbl">PDF Respuesta</label>
+        <div id="${id}-srow">${r.sName?`<button class="bpv" style="font-size:.57rem;" onclick="viewReqPdf('${id}','s')">👁 Ver</button> <span style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--gl2);">✓ ${esc(r.sName.slice(0,22))}</span>`:
+          `<button class="btnS" style="font-size:.57rem;" onclick="uplReqPdf('${id}','s')">📎 Subir PDF resp.</button>`}</div></div>
+    </div>`;
+  G('reqCont').appendChild(div);
+  // Set date from stored fechaR
+  if(data?.fechaR)parseDate(data.fechaR,id+'-f');
+}
+function rmReq(id){G(id)?.remove();}
+function recalcVenc(id){
+  const fecha=buildDate(gv(id+'-fd'),gv(id+'-fm'),gv(id+'-fy'));
+  const term=gv(id+'-term'),tipo=gv(id+'-tipoT');
+  const vd=calcVenc(fecha,term,tipo);
+  const venc=vd?vd.toISOString().slice(0,10):null;
+  const vbEl=G(id+'-vb'),vdEl=G(id+'-vdisp');
+  if(vbEl)vbEl.innerHTML=venc?`<span class="vbadge ${vc(dpv(venc))}">${fd(venc)} · ${vl(dpv(venc))}</span>`:`<span class="vbadge pending">— fecha + término —</span>`;
+  if(vdEl)vdEl.textContent=venc?fd(venc):'—';
+}
+async function uplReqPdf(id,tipo){
+  if(!canEdit()){notify('Sin permisos');return;}
+  const inp=document.createElement('input');inp.type='file';inp.accept='application/pdf';
+  inp.onchange=async()=>{
+    const file=inp.files[0];if(!file)return;
+    const bytes=new Uint8Array(await file.arrayBuffer());
+    const card=G(id);if(!card)return;
+    card.setAttribute('data-'+tipo+'b',JSON.stringify(Array.from(bytes)));
+    card.setAttribute('data-'+tipo+'n',file.name);
+    const row=G(id+'-'+tipo+'row');
+    if(row)row.innerHTML=`<button class="bpv" style="font-size:.57rem;" onclick="viewReqPdfCard('${id}','${tipo}')">👁 Ver</button> <span style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--gl2);">✓ ${esc(file.name.slice(0,22))}</span>`;
+    // Auto-merge into main PDF
+    setPdfStat('proc','Fusionando al expediente…');
+    try{const res=await mergePdfs(tPdfB,[file]);tPdfB=res.bytes;tPdfP=res.pages;
+      tPdfF.push({name:`[${tipo==='r'?'REQ':'RESP'}] ${file.name}`,pages:0});
+      renderPdfList();renderPdfActs();setPdfStat('rdy',`✓ ${tPdfP} páginas`);sv('eFojas',String(tPdfP));}
+    catch(e){setPdfStat('err','Error: '+e.message);}
+    notify(`PDF ${tipo==='r'?'requerimiento':'respuesta'} cargado`);
+  };inp.click();
+}
+function viewReqPdfCard(id,tipo){
+  const card=G(id);if(!card)return;
+  const raw=card.getAttribute('data-'+tipo+'b');if(!raw){notify('Sin PDF');return;}
+  openPDFV(new Uint8Array(JSON.parse(raw)),card.getAttribute('data-'+tipo+'n')||'PDF');
+}
+async function viewReqPdf(id,tipo){viewReqPdfCard(id,tipo);}
+function getReqs(){
+  return[...G('reqCont').children].map(card=>{
+    const id=card.id;
+    const abogId=gv(id+'-abog');const u=users.find(x=>x.uid===abogId);
+    const fecha=buildDate(gv(id+'-fd'),gv(id+'-fm'),gv(id+'-fy'));
+    const term=gv(id+'-term'),tipoT=gv(id+'-tipoT');
+    const vd=calcVenc(fecha,term,tipoT);
+    const rb=card.getAttribute('data-rb');const sb=card.getAttribute('data-sb');
+    return{oficio:gv(id+'-oficio'),desc:gv(id+'-desc'),fechaR:fecha,term,tipoT,
+      venc:vd?vd.toISOString().slice(0,10):null,abogId,abogNom:u?u.nombre||u.email:'',
+      rBytes:rb?Array.from(JSON.parse(rb)):null,rName:card.getAttribute('data-rn')||'',
+      sBytes:sb?Array.from(JSON.parse(sb)):null,sName:card.getAttribute('data-sn')||''};
+  });
+}
+
+// ── PDF ───────────────────────────────────────────────
+async function mergePdfs(existing,files){
+  const{PDFDocument}=PDFLib;const merged=await PDFDocument.create();
+  if(existing?.length){try{const d=await PDFDocument.load(existing);(await merged.copyPages(d,d.getPageIndices())).forEach(p=>merged.addPage(p));}catch(e){}}
+  for(const file of files){try{const d=await PDFDocument.load(await file.arrayBuffer());(await merged.copyPages(d,d.getPageIndices())).forEach(p=>merged.addPage(p));}catch(e){console.warn(e);}}
+  const b=await merged.save();return{bytes:new Uint8Array(b),pages:merged.getPageCount()};
+}
+async function cntPages(buf){try{return(await PDFLib.PDFDocument.load(buf)).getPageCount();}catch(e){return 0;}}
+function pdDrop(e){e.preventDefault();G('pdrop').classList.remove('drag');const f=[...e.dataTransfer.files].filter(x=>x.type==='application/pdf');if(f.length)procPdfs(f);}
+async function procPdfs(files){
+  if(!canEdit()){notify('Sin permisos');return;}
+  setPdfStat('proc','Procesando PDFs…');
+  try{
+    const infos=[];
+    for(const f of files){const p=await cntPages(await f.arrayBuffer());infos.push({name:f.name,pages:p});}
+    const res=await mergePdfs(tPdfB,files);tPdfB=res.bytes;tPdfP=res.pages;infos.forEach(fi=>tPdfF.push(fi));
+    renderPdfList();renderPdfActs();setPdfStat('rdy',`✓ ${tPdfP} páginas`);
+    sv('eFojas',String(tPdfP));G('pdfInp').value='';notify(`PDFs integrados · ${tPdfP} páginas`);
+  }catch(err){setPdfStat('err','✗ '+err.message);}
+}
+function setPdfStat(t,m){G('pdfStat').innerHTML=`<div class="pstat ${t}">${t==='proc'?'<span class="spin"></span> ':''}${m}</div>`;}
+function renderPdfList(){G('pdfList').innerHTML=tPdfF.map(f=>`<div style="display:flex;align-items:center;gap:.6rem;padding:.42rem .65rem;background:var(--bg);border:1px solid var(--bor);margin-bottom:3px;"><span>📄</span><span style="font-family:'IBM Plex Mono',monospace;font-size:.63rem;flex:1;">${esc(f.name)}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:.59rem;color:var(--gold);">${f.pages||'?'}p</span></div>`).join('');}
+function renderPdfActs(){G('pdfActs').innerHTML=tPdfB?`<div style="display:flex;gap:.42rem;flex-wrap:wrap;margin-top:.4rem;">
+  <button class="bpv" onclick="prevPDF()">👁 Vista previa</button>
+  <button style="display:inline-flex;align-items:center;gap:.32rem;padding:.38rem .7rem;background:rgba(201,168,76,.08);border:1px solid var(--gd);color:var(--gold);font-family:'IBM Plex Mono',monospace;font-size:.61rem;text-transform:uppercase;cursor:pointer;" onclick="dlPDF()">⬇ Descargar</button>
+  ${canEdit()?`<button class="btnD" style="font-size:.6rem;padding:.35rem .55rem;" onclick="clrPDF()">✕ Eliminar</button>`:''}
+  </div>${canEdit()?`<div style="margin-top:.6rem;"><div class="pdrop" style="padding:.7rem;" ondragover="ev(event)" ondragleave="G('pdrop').classList.remove('drag')" ondrop="pdDrop(event)"><input type="file" accept="application/pdf" multiple onchange="procPdfs(this.files)"><div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.07em;text-transform:uppercase;color:var(--td);">+ Agregar más hojas</div></div></div>`:''}`:''}
+function prevPDF(){if(tPdfB)openPDFV(tPdfB,'Vista previa');}
+function dlPDF(){if(tPdfB)dlBlob(new Blob([tPdfB],{type:'application/pdf'}),'expediente.pdf');}
+function clrPDF(){if(!confirm('¿Eliminar PDF?'))return;tPdfB=null;tPdfP=0;tPdfF=[];G('pdfStat').innerHTML='';G('pdfList').innerHTML='';G('pdfActs').innerHTML='';}
+function openPDFV(bytes,title){
+  const blob=new Blob([bytes],{type:'application/pdf'});const url=URL.createObjectURL(blob);
+  G('pdfTitle').textContent=title||'PDF';G('pdfFrame').src=url;
+  const dl=G('pdfDL');dl.href=url;dl.download=slug(title||'exp')+'.pdf';
+  openModal('mPDF');setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+async function viewExpPdf(id){
+  notify('Descargando PDF…');
+  try{const bytes=await downloadChunks(`expedientes/${id}/pdfChunks`);if(bytes)openPDFV(bytes,'Expediente');else notify('Sin PDF');}
+  catch(err){notify('Error: '+err.message);}
+}
+
+// ── GUARDAR EXPEDIENTE ────────────────────────────────
+async function saveExp(){
+  if(!canEdit()){notify('Sin permisos');return;}
+  const tipoId=gv('eTipo');if(!tipoId){eTab(0);notify('Selecciona tipo de documento');return;}
+  const tipo=tipos.find(t=>t.id===tipoId);
+  const finalCode=G('eCode').textContent||'';
+  if(!finalCode||finalCode==='—'){eTab(0);notify('Código no generado');return;}
+  if(exps.find(e=>e.code===finalCode&&e.id!==editExpId)){eTab(0);notify('Código duplicado');return;}
+  syncBar(true);
+  const btn=G('btnSaveExp');btn.disabled=true;btn.textContent='Guardando…';
+  try{
+    const asgns=getAsgns();const reqs=getReqs();
+    const expId=editExpId||db.collection('expedientes').doc().id;
+    // Upload main PDF
+    let hasPdf=editExpId?exps.find(e=>e.id===editExpId)?.hasPdf:false;
+    if(tPdfB){
+      btn.textContent='Subiendo PDF…';
+      await uploadChunks(`expedientes/${expId}/pdfChunks`,tPdfB);
+      hasPdf=true;
+    }
+    // Upload req PDFs
+    const cleanReqs=await Promise.all(reqs.map(async(r,i)=>{
+      const clean={...r};
+      if(r.rBytes?.length){await uploadChunks(`expedientes/${expId}/req_${i}_r`,new Uint8Array(r.rBytes));clean.rHasChunks=true;}
+      if(r.sBytes?.length){await uploadChunks(`expedientes/${expId}/req_${i}_s`,new Uint8Array(r.sBytes));clean.sHasChunks=true;}
+      delete clean.rBytes;delete clean.sBytes;
+      return clean;
+    }));
+    const data={tipoId,tipoNombre:tipo.nombre,seccion:tipo.seccion,code:finalCode,
+      numExp:gv('eNum'),promovente:gv('eProm'),direccion:gv('eDir'),
+      fojas:gv('eFojas'),contenido:gv('eCont'),estatus:gv('eEst'),obsAsgn:gv('eObs'),
+      pendientes:gv('ePend'),anotaciones:gv('eAnot'),
+      asgns,reqs:cleanReqs,hasPdf,pdfPages:tPdfP,pdfFiles:tPdfF,
+      updAt:ts(),updBy:cu.email,updByName:cu.nombre,updByRole:cu.rol};
+    if(editExpId){
+      await db.collection('expedientes').doc(editExpId).update(data);
+    }else{
+      data.id=expId;data.createdAt=ts();data.createdBy=cu.email;data.createdByName=cu.nombre;
+      await db.collection('expedientes').doc(expId).set(data);
+    }
+    // Send notifications for assignments
+    await sendAsgnNotifs(expId,finalCode,gv('eProm'),asgns,cleanReqs);
+    await logAudit(editExpId?'EDITAR':'CREAR',finalCode,`Expediente ${editExpId?'editado':'creado'}: ${finalCode}`,null,null);
+    closeModal('mExp');notify('✓ Expediente guardado');
+  }catch(err){notify('Error al guardar: '+err.message,6000);console.error(err);}
+  syncBar(false);btn.disabled=false;btn.textContent='☁ Guardar en Firebase';
+}
+
+async function openExpEdit(id){
+  if(!canEdit()){notify('Sin permisos');return;}
+  const e=exps.find(x=>x.id===id);if(!e)return;
+  editExpId=id;codeManual=false;tPdfB=null;tPdfP=e.pdfPages||0;tPdfF=[...(e.pdfFiles||[])];
+  G('mExpT').textContent='Editar Expediente';
+  const ts2=G('eTipo');ts2.innerHTML='<option value="">— Seleccionar —</option>';
+  [...tipos].sort((a,b)=>a.seccion.localeCompare(b.seccion)).forEach(t=>{const o=document.createElement('option');o.value=t.id;o.textContent=`${t.nombre} (${t.seccion})`;ts2.appendChild(o);});
+  sv('eTipo',e.tipoId);sv('eSecc',e.seccion||'');
+  G('eCode').textContent=e.code||'—';G('ceArea').style.display='none';
+  const yrM=e.code?.match(/\/(\d{2})$/);sv('eAnio',yrM?yrM[1]:'26');
+  sv('eNum',e.numExp||'');sv('eProm',e.promovente||'');sv('eDir',e.direccion||'');
+  sv('eFojas',e.fojas||'');sv('eCont',e.contenido||'');sv('eEst',e.estatus||'');
+  sv('eObs',e.obsAsgn||'');sv('ePend',e.pendientes||'');sv('eAnot',e.anotaciones||'');
+  G('pdfInp').value='';
+  if(e.hasPdf){setPdfStat('rdy',`✓ PDF en Firebase · ${e.pdfPages||'?'} páginas`);renderPdfList();renderPdfActs();}
+  else{G('pdfStat').innerHTML='';G('pdfList').innerHTML='';G('pdfActs').innerHTML='';}
+  G('asgnCont').innerHTML='';asgnIdx=0;(e.asgns||[]).forEach(a=>addAsgn(a));
+  G('reqCont').innerHTML='';reqIdx=0;
+  (e.reqs||[]).forEach((r,i)=>{
+    addReq(r);
+    const cardId=[...G('reqCont').children][i]?.id;
+    if(!cardId)return;
+    if(r.rHasChunks){
+      G(cardId+'-rrow').innerHTML=`<button class="bpv" style="font-size:.57rem;" onclick="viewStoredReqPdf('${id}',${i},'r')">👁 Ver req.</button>`;
+    }
+    if(r.sHasChunks){
+      G(cardId+'-srow').innerHTML=`<button class="bpv" style="font-size:.57rem;" onclick="viewStoredReqPdf('${id}',${i},'s')">👁 Ver resp.</button>`;
+    }
+  });
+  eTab(0);openModal('mExp');
+}
+
+async function viewStoredReqPdf(expId,idx,tipo){
+  notify('Descargando…');
+  try{const bytes=await downloadChunks(`expedientes/${expId}/req_${idx}_${tipo}`);if(bytes)openPDFV(bytes,'PDF');else notify('Sin PDF');}
+  catch(err){notify('Error: '+err.message);}
+}
+
+async function delExp(id){
+  if(!isMaster()){notify('Solo Master puede eliminar');return;}
+  const e=exps.find(x=>x.id===id);if(!e)return;
+  if(!confirm(`¿Eliminar expediente ${e.code||id}?`))return;
+  syncBar(true);
+  try{await db.collection('expedientes').doc(id).delete();await logAudit('ELIMINAR',e.code,`Eliminado: ${e.code}`,null,null);notify('✓ Eliminado');}
+  catch(err){notify('Error: '+err.message);}
+  syncBar(false);
+}
+
+// ── TIPOS ─────────────────────────────────────────────
+async function saveTipo(){
+  const n=gv('tNom').trim(),s=gv('tSec').trim(),c=gv('tCol');
+  if(!n||!s){notify('Completa nombre y sección');return;}
+  try{const id=uid();await db.collection('tipos').doc(id).set({id,nombre:n,seccion:s,color:c});
+    await logAudit('TIPO',n,`Tipo creado: ${n}`,null,null);closeModal('mTipo');notify(`✓ Tipo "${n}" creado`);}
+  catch(err){notify('Error: '+err.message);}
+}
+
+// ── USUARIOS ──────────────────────────────────────────
+async function loadUsers(){
+  try{
+    const snap=await db.collection('usuarios').get({source:'server'});
+    users=snap.docs.map(d=>({uid:d.id,...d.data()}));
+    renderUsersList();renderRptFilters();renderCargaFilters();
+    popUserSelects(['s-designado','m-elaborado','m-designado']);
+  }catch(e){console.warn('loadUsers:',e);}
+}
+function openUsers(){loadUsers();openModal('mUsers');}
+async function createUser(){
+  if(!isMaster()){notify('Sin permisos');return;}
+  const email=gv('nuEmail').trim(),nom=gv('nuNom').trim(),pass=gv('nuPass'),rol=gv('nuRol');
+  if(!email||!pass){notify('Completa email y contraseña');return;}
+  if(pass.length<6){notify('Mínimo 6 caracteres');return;}
+  try{
+    const cred=await auth.createUserWithEmailAndPassword(email,pass);
+    await db.collection('usuarios').doc(cred.user.uid).set({uid:cred.user.uid,email,nombre:nom||email,rol,ca:ts()});
+    sv('nuEmail','');sv('nuNom','');sv('nuPass','');
+    await loadUsers();
+    await logAudit('USUARIO','Sistema',`Usuario creado: ${email} (${rol})`,null,null);
+    notify(`✓ Usuario "${email}" creado\nNota: vuelve a iniciar sesión como Master.`);
+  }catch(err){notify('Error: '+err.message,5000);}
+}
+async function chgUserRole(uid2,r){
+  try{await db.collection('usuarios').doc(uid2).update({rol:r});await loadUsers();notify(`✓ Rol actualizado → ${r}`);}
+  catch(err){notify('Error: '+err.message);}
+}
+async function resetUserPass(email){
+  if(!confirm(`¿Enviar email de restablecimiento a ${email}?`))return;
+  try{await auth.sendPasswordResetEmail(email);notify(`✓ Email enviado a ${email}`);}
+  catch(err){notify('Error: '+err.message);}
+}
+function renderUsersList(){
+  const c=G('usersList');if(!c)return;
+  if(!users.length){c.innerHTML='<div style="padding:1rem;text-align:center;font-family:\'IBM Plex Mono\',monospace;font-size:.68rem;color:var(--td);">Sin usuarios</div>';return;}
+  c.innerHTML=users.map(u=>`<div style="display:flex;align-items:center;gap:.55rem;padding:.5rem .68rem;border-bottom:1px solid var(--bor);flex-wrap:wrap;">
+    <span style="font-size:.78rem;flex:1;">👤 ${esc(u.nombre||u.email)}</span>
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:.59rem;color:var(--td);">${esc(u.email||'')}</span>
+    <span class="rchip rc-${u.rol||'consulta'}">${u.rol||'?'}</span>
+    <select style="background:var(--bg);border:1px solid var(--bor);color:var(--tx);padding:.16rem .4rem;font-family:'IBM Plex Mono',monospace;font-size:.59rem;" onchange="chgUserRole('${u.uid}',this.value)">
+      <option value="master" ${u.rol==='master'?'selected':''}>master</option>
+      <option value="abogado" ${u.rol==='abogado'?'selected':''}>abogado</option>
+      <option value="asistente" ${u.rol==='asistente'?'selected':''}>asistente</option>
+      <option value="consulta" ${u.rol==='consulta'?'selected':''}>consulta</option>
+    </select>
+    <button class="bicon" title="Reset contraseña" onclick="resetUserPass('${esc(u.email||'')}')">🔑</button>
+  </div>`).join('');
+}
+
+// ── DETALLE EXPEDIENTE ────────────────────────────────
+function openDet(id){
+  const e=exps.find(x=>x.id===id);if(!e)return;
+  G('dCode').textContent=e.code||'—';G('dTipo').textContent=e.tipoNombre||'—';
+  let h=`<div class="df"><div class="dl">Promovente</div><div class="dv">${esc(e.promovente||'—')}</div></div>
+    <div class="df"><div class="dl">Dirección</div><div class="dv">${esc(e.direccion||'—')}</div></div>
+    <div class="df"><div class="dl">Fojas / Estatus</div><div class="dv">${esc(e.fojas||'—')} / ${e.estatus?`<span class="pill ${SC[e.estatus]||''}">${SL[e.estatus]||e.estatus}</span>`:'—'}</div></div>
+    <div class="df"><div class="dl">Contenido</div><div class="dv">${esc(e.contenido||'—')}</div></div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:.58rem;letter-spacing:.11em;text-transform:uppercase;color:var(--td);display:flex;align-items:center;gap:.65rem;margin:.2rem 0;">Asignaciones<span style="flex:1;height:1px;background:var(--bor);display:block;"></span></div>`;
+  (e.asgns?.length?e.asgns:[]).forEach(a=>{h+=`<div style="background:var(--bg);border:1px solid ${!a.devDate?'#1a6b3c':'var(--bor)'};padding:.55rem .75rem;font-size:.75rem;display:flex;flex-direction:column;gap:.2rem;">
+    <div style="display:flex;gap:.4rem;align-items:center;"><span style="font-family:'IBM Plex Mono',monospace;font-size:.53rem;padding:.06rem .28rem;border:1px solid ${!a.devDate?'var(--grn)':'var(--bor)'};color:${!a.devDate?'var(--gl2)':'var(--td)'};">${!a.devDate?'EN PODER':'DEVUELTO'}</span><span style="color:var(--tx);">${esc(a.abogNom||'—')}</span></div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--td);">Asignado: ${fd(a.aDate)}${a.devDate?' · Dev: '+fd(a.devDate):''}${a.nota?' · '+esc(a.nota):''}</div></div>`;});
+  if(!e.asgns?.length)h+='<div style="font-size:.74rem;color:var(--td);">Sin asignaciones</div>';
+  if(e.reqs?.length){
+    h+=`<div style="font-family:'IBM Plex Mono',monospace;font-size:.58rem;letter-spacing:.11em;text-transform:uppercase;color:var(--td);display:flex;align-items:center;gap:.65rem;margin:.2rem 0;">Requerimientos (${e.reqs.length})<span style="flex:1;height:1px;background:var(--bor);display:block;"></span></div>`;
+    e.reqs.forEach((r,i)=>{const vH=r.venc?`<span class="pill v-${vc(dpv(r.venc))}">${fd(r.venc)}·${vl(dpv(r.venc))}</span>`:'—';
+      h+=`<div style="background:var(--bg);border:1px solid var(--bor);padding:.55rem .75rem;display:flex;flex-direction:column;gap:.28rem;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:.64rem;color:var(--gold);">#${i+1} ${esc(r.oficio||'Sin número')}</div>
+        ${r.desc?`<div style="font-size:.74rem;color:var(--tm);">${esc(r.desc)}</div>`:''}
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--td);">${fd(r.fechaR)} · ${r.term||'—'}d ${r.tipoT==='habiles'?'hábiles':'naturales'}${r.abogNom?' · '+esc(r.abogNom):''}</div>
+        <div>Vence: ${vH}</div>
+        <div style="display:flex;gap:.35rem;">${r.rHasChunks?`<button class="bpv" style="font-size:.56rem;padding:.2rem .42rem;" onclick="viewStoredReqPdf('${e.id}',${i},'r')">📄 Req.</button>`:''}${r.sHasChunks?`<button class="bpv" style="font-size:.56rem;padding:.2rem .42rem;" onclick="viewStoredReqPdf('${e.id}',${i},'s')">📄 Resp.</button>`:''}</div></div>`;
+    });
+  }
+  if(e.hasPdf){h+=`<div style="font-family:'IBM Plex Mono',monospace;font-size:.58rem;letter-spacing:.11em;text-transform:uppercase;color:var(--td);display:flex;align-items:center;gap:.65rem;margin:.2rem 0;">PDF<span style="flex:1;height:1px;background:var(--bor);"></span></div>
+    <div style="display:flex;gap:.38rem;flex-wrap:wrap;align-items:center;">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--tm);">📄 ${e.pdfPages||'?'} páginas</span>
+      <button class="bpv" onclick="viewExpPdf('${e.id}')">👁 Ver / Descargar</button></div>`;}
+  if(e.pendientes||e.anotaciones){
+    if(e.pendientes)h+=`<div class="df"><div class="dl">Pendientes</div><div class="dv" style="white-space:pre-wrap;">${esc(e.pendientes)}</div></div>`;
+    if(e.anotaciones)h+=`<div class="df"><div class="dl">Anotaciones</div><div class="dv" style="white-space:pre-wrap;">${esc(e.anotaciones)}</div></div>`;}
+  h+=`<div class="df"><div class="dl">Metadatos</div><div class="dv" style="font-size:.68rem;color:var(--td);">Creado ${fdt(e.createdAt)} por ${esc(e.createdByName||e.createdBy||'?')}<br>Modificado ${fdt(e.updAt)} por ${esc(e.updByName||e.updBy||'?')}</div></div>`;
+  if(canEdit()){h+=`<div style="display:flex;gap:.42rem;margin-top:.38rem;">
+    <button class="btnP" style="font-size:.62rem;padding:.38rem .75rem;" onclick="closeDet();openExpEdit('${e.id}')">✎ Editar</button>
+    ${isMaster()?`<button class="btnD" style="font-size:.62rem;padding:.38rem .75rem;" onclick="closeDet();delExp('${e.id}')">🗑 Eliminar</button>`:''}</div>`;}
+  G('dBody').innerHTML=h;G('dov').classList.add('on');
+}
+function closeDet(){G('dov').classList.remove('on');}
+G('dov').addEventListener('click',e=>{if(e.target===G('dov'))closeDet();});
+
+// ── REPORTES ─────────────────────────────────────────
+function renderRptFilters(){
+  const rfT=G('rfT'),rfA=G('rfA');if(!rfT)return;
+  const cT=rfT.value,cA=rfA.value;
+  rfT.innerHTML='<option value="">Todos los tipos</option>'+[...tipos].sort((a,b)=>a.seccion.localeCompare(b.seccion)).map(t=>`<option value="${t.id}" ${t.id===cT?'selected':''}>${esc(t.nombre)}</option>`).join('');
+  rfA.innerHTML='<option value="">Todos los abogados</option>'+users.filter(u=>['master','abogado','asistente'].includes(u.rol)).map(u=>`<option value="${u.uid}" ${u.uid===cA?'selected':''}>${esc(u.nombre||u.email)}</option>`).join('');
+}
+function getRptList(){
+  const ft=gv('rfT'),fe=gv('rfE'),fa=gv('rfA');
+  return exps.filter(e=>{
+    if(ft&&e.tipoId!==ft)return false;if(fe&&e.estatus!==fe)return false;
+    if(fa){const c=curAsgn(e);if(!c||c.abogId!==fa)return false;}return true;
+  });
+}
+function renderRpt(){
+  renderRptFilters();const list=getRptList();
+  let vT=0;list.forEach(e=>(e.reqs||[]).forEach(r=>{if(r.venc&&dpv(r.venc)<=7)vT++;}));
+  G('rKpis').innerHTML=`<div class="kc2"><span class="kn">${list.length}</span><span class="kl">Expedientes</span></div>
+    <div class="kc2"><span class="kn" style="color:var(--gl2)">${list.filter(e=>e.estatus==='activo').length}</span><span class="kl">Activos</span></div>
+    <div class="kc2"><span class="kn" style="color:var(--red)">${vT}</span><span class="kl">Por Vencer ≤7d</span></div>
+    <div class="kc2"><span class="kn" style="color:var(--bl2)">${list.filter(e=>e.hasPdf).length}</span><span class="kl">Con PDF</span></div>
+    <div class="kc2"><span class="kn">${list.reduce((s,e)=>s+(parseInt(e.fojas)||0),0)}</span><span class="kl">Total Fojas</span></div>`;
+  function mkChart(title,data){
+    if(!data.length)return`<div style="background:var(--sur);border:1px solid var(--bor);padding:.85rem;"><div style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tm);margin-bottom:.6rem;">${title}</div><div style="font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--td);">Sin datos</div></div>`;
+    const max=Math.max(...data.map(x=>x.c),1);
+    return`<div style="background:var(--sur);border:1px solid var(--bor);padding:.85rem;"><div style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tm);margin-bottom:.6rem;">${title}</div><div class="bwrap">${data.map(d=>`<div class="brow"><span class="blbl" title="${esc(d.l)}">${esc(d.l)}</span><div class="btrk"><div class="bfill" style="width:${Math.round(d.c/max*100)}%;background:${d.color};"></div></div><span class="bval">${d.c}</span></div>`).join('')}</div></div>`;
+  }
+  const byTipo=()=>{const cc={};[...tipos].sort((a,b)=>a.seccion.localeCompare(b.seccion)).forEach(t=>{cc[t.id]={l:t.nombre.slice(0,16),c:0,color:'var(--gold)'};});list.forEach(e=>{if(cc[e.tipoId])cc[e.tipoId].c++;});return Object.values(cc).filter(x=>x.c>0);};
+  const byEst=()=>{const s={activo:{l:'Activo',c:0,color:'var(--grn)'},'en-tramite':{l:'En Trámite',c:0,color:'var(--blu)'},suspendido:{l:'Suspendido',c:0,color:'var(--yel)'},concluido:{l:'Concluido',c:0,color:'var(--td)'},sobreseido:{l:'Sobreseído',c:0,color:'var(--pur)'}};list.forEach(e=>{if(s[e.estatus||''])s[e.estatus].c++;});return Object.values(s).filter(x=>x.c>0);};
+  const byAbog=()=>{const cc={};list.forEach(e=>{const a=curAsgn(e);if(a?.abogNom)cc[a.abogNom]=(cc[a.abogNom]||0)+1;});return Object.entries(cc).map(([l,c])=>({l,c,color:'var(--bl2)'}));};
+  G('rCharts').innerHTML=mkChart('Por Tipo',byTipo())+mkChart('Por Estatus',byEst())+mkChart('Por Responsable',byAbog());
+  const t=G('rTable');
+  t.querySelector('thead').innerHTML='<tr>'+['Código','Tipo','Promovente','Fojas','Estatus','Responsable','Venc. Próx.','Creado por'].map(h=>`<th style="padding:.5rem .58rem;font-family:'IBM Plex Mono',monospace;font-size:.54rem;letter-spacing:.07em;text-transform:uppercase;color:var(--td);background:var(--sur2);border-bottom:1px solid var(--bor);text-align:left;white-space:nowrap;">${h}</th>`).join('')+'</tr>';
+  t.querySelector('tbody').innerHTML=list.length?list.map(e=>{const c=curAsgn(e);const vm=minVenc(e);
+    return`<tr><td style="padding:.5rem .58rem;font-family:'IBM Plex Mono',monospace;font-size:.61rem;color:var(--gold);">${esc(e.code||'—')}</td><td style="padding:.5rem .58rem;font-size:.73rem;">${esc(e.tipoNombre||'—')}</td><td style="padding:.5rem .58rem;font-size:.73rem;">${esc(e.promovente||'—')}</td><td style="padding:.5rem .58rem;font-family:'IBM Plex Mono',monospace;">${esc(e.fojas||'—')}</td><td style="padding:.5rem .58rem;">${e.estatus?`<span class="pill ${SC[e.estatus]||''}">${SL[e.estatus]||e.estatus}</span>`:'—'}</td><td style="padding:.5rem .58rem;font-size:.73rem;">${esc(c?.abogNom||'—')}</td><td style="padding:.5rem .58rem;font-family:'IBM Plex Mono',monospace;font-size:.64rem;">${vm?fd(vm)+' ('+vl(dpv(vm))+')':'—'}</td><td style="padding:.5rem .58rem;font-size:.64rem;">${esc(e.createdByName||e.createdBy||'—')}</td></tr>`;
+  }).join(''):`<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--td);">Sin datos</td></tr>`;
+}
+function rptPDF(){const rows=[...G('rTable').querySelector('tbody').querySelectorAll('tr')];const html=`<html><head><meta charset="UTF-8"><style>body{font-family:Arial,sans-serif;font-size:9px;}h1{font-size:13px;}table{width:100%;border-collapse:collapse;}th{background:#1a1916;color:#e8c97a;padding:3px 5px;font-size:8px;text-align:left;}td{padding:3px 5px;border-bottom:1px solid #ddd;}</style></head><body><h1>DRPA · Reporte · ${new Date().toLocaleString('es-MX')}</h1><table><thead>${G('rTable').querySelector('thead').innerHTML}</thead><tbody>${rows.map(r=>r.outerHTML).join('')}</tbody></table></body></html>`;const w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(()=>w.print(),400);}
+function rptCSV(){const list=getRptList();const h='"Codigo","Tipo","Promovente","Fojas","Estatus","Responsable","Prox Vencimiento","Con PDF","Creado por"';const rows=list.map(e=>{const c=curAsgn(e);const vm=minVenc(e);return[e.code,e.tipoNombre,e.promovente,e.fojas,SL[e.estatus]||'',c?.abogNom||'',vm?fd(vm)+' ('+vl(dpv(vm))+')':'',e.hasPdf?'Si':'No',e.createdByName||e.createdBy||''].map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(',');});dlBlob(new Blob(['\uFEFF'+h+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'}),`DRPA_Reporte_${new Date().toISOString().slice(0,10)}.csv`);notify('✓ CSV exportado');}
+
+// ── CARGA DE TRABAJO ──────────────────────────────────
+function renderCargaFilters(){
+  const sel=G('carga-abog');if(!sel)return;const cur=sel.value;
+  sel.innerHTML='<option value="">Todos los abogados</option>';
+  users.filter(u=>['master','abogado','asistente'].includes(u.rol)).forEach(u=>{const o=document.createElement('option');o.value=u.uid;o.textContent=u.nombre||u.email;if(u.uid===cur)o.selected=true;sel.appendChild(o);});
+}
+function renderCarga(){
+  const fa=gv('carga-abog'),fe=gv('carga-est');
+  const lawyers={};
+  users.filter(u=>['master','abogado','asistente'].includes(u.rol)).forEach(u=>{lawyers[u.uid]={nombre:u.nombre||u.email,uid:u.uid,total:0,activos:0,concluidos:0,vencidos:0,urgentes:0,reqs:0,exps:[]};});
+  exps.forEach(e=>{
+    if(fe&&e.estatus!==fe)return;
+    const cur=curAsgn(e);const abogId=cur?.abogId||'__sin__';
+    if(fa&&abogId!==fa)return;
+    if(!lawyers[abogId])lawyers[abogId]={nombre:'Sin asignar',uid:'__sin__',total:0,activos:0,concluidos:0,vencidos:0,urgentes:0,reqs:0,exps:[]};
+    const l=lawyers[abogId];l.total++;
+    if(['activo','en-tramite'].includes(e.estatus))l.activos++;
+    if(['concluido','sobreseido'].includes(e.estatus))l.concluidos++;
+    l.reqs+=(e.reqs||[]).length;
+    const vm=minVenc(e);if(vm){const d=dpv(vm);if(d<0)l.vencidos++;else if(d<=3)l.urgentes++;}
+    l.exps.push({...e,_vm:vm,_aDate:cur?.aDate||null});
+  });
+  const all=Object.values(lawyers).filter(l=>l.total>0).sort((a,b)=>b.activos-a.activos);
+  // KPIs
+  G('cargaKpis').innerHTML=`<div class="kc"><span class="kn">${all.filter(l=>l.uid!=='__sin__').length}</span><span class="kl">Abogados</span></div>
+    <div class="kc"><span class="kn">${all.reduce((s,l)=>s+l.total,0)}</span><span class="kl">Expedientes</span></div>
+    <div class="kc"><span class="kn" style="color:var(--red)">${all.reduce((s,l)=>s+l.vencidos,0)}</span><span class="kl">Vencidos</span></div>
+    <div class="kc"><span class="kn" style="color:var(--org)">${all.reduce((s,l)=>s+l.urgentes,0)}</span><span class="kl">Urgentes</span></div>`;
+  // Charts
+  const maxA=Math.max(...all.map(l=>l.activos),1),maxR=Math.max(...all.map(l=>l.reqs),1);
+  G('cargaCharts').innerHTML=`<div style="background:var(--sur);border:1px solid var(--bor);padding:.85rem;"><div style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tm);margin-bottom:.6rem;">Activos por responsable</div><div class="bwrap">${all.map(l=>`<div class="brow"><span class="blbl">${esc(l.nombre.split(' ')[0])}</span><div class="btrk"><div class="bfill" style="width:${Math.round(l.activos/maxA*100)}%;background:var(--gold);"></div></div><span class="bval">${l.activos}</span></div>`).join('')}</div></div>
+  <div style="background:var(--sur);border:1px solid var(--bor);padding:.85rem;"><div style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tm);margin-bottom:.6rem;">Requerimientos por responsable</div><div class="bwrap">${all.map(l=>`<div class="brow"><span class="blbl">${esc(l.nombre.split(' ')[0])}</span><div class="btrk"><div class="bfill" style="width:${Math.round(l.reqs/maxR*100)}%;background:var(--bl2);"></div></div><span class="bval">${l.reqs}</span></div>`).join('')}</div></div>`;
+  // Detail per lawyer
+  G('cargaDetail').innerHTML=all.map(l=>`<div style="border:1px solid var(--bor);background:var(--sur);margin-bottom:1rem;">
+    <div style="padding:.75rem 1rem;border-bottom:1px solid var(--bor);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+      <div><span style="font-family:'Playfair Display',serif;font-size:.95rem;color:var(--tx);">⚖ ${esc(l.nombre)}</span>
+        ${l.vencidos>0?`<span class="pill v-vencido" style="margin-left:.5rem;">${l.vencidos} vencido${l.vencidos>1?'s':''}</span>`:''}
+        ${l.urgentes>0?`<span class="pill v-urgente" style="margin-left:.3rem;">${l.urgentes} urgente${l.urgentes>1?'s':''}</span>`:''}</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--td);display:flex;gap:.9rem;">
+        <span>Total: <strong style="color:var(--tx)">${l.total}</strong></span>
+        <span>Activos: <strong style="color:var(--gl2)">${l.activos}</strong></span>
+        <span>Concluidos: <strong style="color:var(--td)">${l.concluidos}</strong></span>
+        <span>Reqs: <strong style="color:var(--bl2)">${l.reqs}</strong></span>
+      </div></div>
+    <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:680px;">
+      <thead><tr style="background:var(--sur2);">
+        ${['Código','Tipo','Promovente','Asig. desde','Estatus','Próx. Venc.'].map(h=>`<th style="padding:.45rem .6rem;font-family:'IBM Plex Mono',monospace;font-size:.56rem;letter-spacing:.07em;text-transform:uppercase;color:var(--td);text-align:left;">${h}</th>`).join('')}</tr></thead>
+      <tbody>${l.exps.map(e=>{const vm=e._vm;const vH=vm?`<span class="pill v-${vc(dpv(vm))}">${vl(dpv(vm))}</span>`:'—';
+        return`<tr style="border-bottom:1px solid var(--bor);">
+          <td style="padding:.45rem .6rem;font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--gold);">${esc(e.code||'—')}</td>
+          <td style="padding:.45rem .6rem;font-size:.72rem;"><span class="pill p-custom">${esc(e.tipoNombre||'—')}</span></td>
+          <td style="padding:.45rem .6rem;font-size:.72rem;color:var(--tm);">${esc(e.promovente||'—')}</td>
+          <td style="padding:.45rem .6rem;font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--td);">${fd(e._aDate)}</td>
+          <td style="padding:.45rem .6rem;">${e.estatus?`<span class="pill ${SC[e.estatus]||''}">${SL[e.estatus]||e.estatus}</span>`:'—'}</td>
+          <td style="padding:.45rem .6rem;">${vH}</td></tr>`;}).join('')}</tbody>
+    </table></div></div>`).join('')||'<div class="empty"><div class="emptyi">⚖</div><div class="emptyt">Sin expedientes asignados</div></div>';
+}
+function expCargaCSV(){
+  const rows=[];exps.forEach(e=>{const c=curAsgn(e);const vm=minVenc(e);rows.push([e.code,e.tipoNombre,e.promovente,c?.abogNom||'Sin asignar',c?.aDate||'',e.estatus,vm?fd(vm):'',e.reqs?.length||0].map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(','));});
+  const h='"Codigo","Tipo","Promovente","Abogado","Fecha Asignacion","Estatus","Prox Vencimiento","Num Reqs"';
+  dlBlob(new Blob(['\uFEFF'+h+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'}),`carga_trabajo_${new Date().toISOString().slice(0,10)}.csv`);notify('✓ CSV exportado');
+}
+
+// ── SOLICITUDES ───────────────────────────────────────
+function sTab(n){for(let i=0;i<3;i++){G(`st${i}`)?.classList.toggle('on',i===n);G(`sp${i}`)?.classList.toggle('on',i===n);}}
+function openSolModal(data){
+  if(!canEdit()){notify('Sin permisos');return;}
+  editSolId=data?.id||null;
+  solPdfB={sol:null,resp:null};solPdfN={sol:'',resp:''};
+  solExpVincId=null;solExpVincCode=null;
+  G('mSolT').textContent=editSolId?'Editar Solicitud':'Nueva Solicitud';
+  // Reset all fields
+  ['s-folioDRPA','s-folioDDU','s-solicitante','s-asunto','s-ofiAten','s-ofiResp','s-obs','s-fd','s-fm','s-fy','s-hh','s-mm','s-dfd','s-dfm','s-dfy','s-expBuscar'].forEach(id=>sv(id,''));
+  sv('s-tipo','ciudadana');sv('s-est','pendiente');
+  // Populate designado select
+  const sel=G('s-designado');sel.innerHTML='<option value="">— Sin asignar —</option>';
+  users.filter(u=>['master','abogado','asistente'].includes(u.rol)).forEach(u=>{const o=document.createElement('option');o.value=u.uid;o.textContent=u.nombre||u.email;sel.appendChild(o);});
+  // Reset PDF rows
+  G('s-pdfSolRow').innerHTML='<button class="btnS" style="font-size:.58rem;" onclick="uplSolPdf(\'sol\')">📎 Subir PDF solicitud</button>';
+  G('s-pdfRespRow').innerHTML='<button class="btnS" style="font-size:.58rem;" onclick="uplSolPdf(\'resp\')">📎 Subir PDF respuesta</button>';
+  G('s-expResults').style.display='none';G('s-expVinc').style.display='none';
+  // If editing, populate fields
+  if(data){
+    sv('s-folioDRPA',data.folioDRPA||'');sv('s-folioDDU',data.folioDDU||'');
+    sv('s-solicitante',data.solicitante||'');sv('s-asunto',data.asunto||'');
+    sv('s-tipo',data.tipo||'ciudadana');sv('s-est',data.estatus||'pendiente');
+    sv('s-designado',data.designadoId||'');
+    sv('s-ofiAten',data.oficioAtencion||'');sv('s-ofiResp',data.oficioRespuesta||'');
+    sv('s-obs',data.obs||'');
+    if(data.fecha)parseDate(data.fecha,'s-f');
+    if(data.hora){const p=data.hora.split(':');sv('s-hh',p[0]);sv('s-mm',p[1]);}
+    if(data.fechaDes)parseDate(data.fechaDes,'s-df');
+    solExpVincId=data.expVincId||null;solExpVincCode=data.expVincCode||null;
+    if(solExpVincCode){G('s-expVinc').style.display='block';G('s-expVinc').textContent='✓ Vinculado: '+solExpVincCode;}
+    if(data.pdfSolName){G('s-pdfSolRow').innerHTML=`<button class="bpv" style="font-size:.57rem;" onclick="viewSolPdf('sol')">👁 Ver</button> <span style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--gl2);">✓ ${esc(data.pdfSolName.slice(0,22))}</span>`;}
+    if(data.pdfRespName){G('s-pdfRespRow').innerHTML=`<button class="bpv" style="font-size:.57rem;" onclick="viewSolPdf('resp')">👁 Ver</button> <span style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--gl2);">✓ ${esc(data.pdfRespName.slice(0,22))}</span>`;}
+  }
+  sTab(0);openModal('mSol');
+}
+
+// Auto-search as user types
+function solAutoSearch(){
+  const q=((gv('s-solicitante')||'')+' '+(gv('s-asunto')||'')).toLowerCase().trim();
+  if(q.length<3){G('s-expResults').style.display='none';return;}
+  const found=exps.filter(e=>(e.promovente||'').toLowerCase().includes(q)||(e.contenido||'').toLowerCase().includes(q)||(e.code||'').toLowerCase().includes(q)).slice(0,4);
+  if(!found.length){G('s-expResults').style.display='none';return;}
+  G('s-expResults').style.display='block';
+  G('s-expResults').innerHTML=found.map(e=>`<div class="search-item" onclick="selSolExp('${e.id}')">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--gold);">${esc(e.code||'—')}</div>
+    <div style="font-size:.7rem;color:var(--tm);">${esc(e.promovente||e.contenido||'—')}</div>
+  </div>`).join('');
+}
+function solBuscarExp(){
+  const q=(gv('s-expBuscar')||'').toLowerCase().trim();
+  if(q.length<2){G('s-expResults').style.display='none';return;}
+  const found=exps.filter(e=>(e.code||'').toLowerCase().includes(q)||(e.promovente||'').toLowerCase().includes(q)||(e.numExp||'').toLowerCase().includes(q)).slice(0,5);
+  if(!found.length){G('s-expResults').style.display='none';G('s-expResults').innerHTML='';return;}
+  G('s-expResults').style.display='block';
+  G('s-expResults').innerHTML=found.map(e=>`<div class="search-item" onclick="selSolExp('${e.id}')">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--gold);">${esc(e.code||'—')}</div>
+    <div style="font-size:.7rem;color:var(--tm);">${esc(e.promovente||'—')}</div>
+  </div>`).join('');
+}
+function selSolExp(id){
+  const e=exps.find(x=>x.id===id);if(!e)return;
+  solExpVincId=id;solExpVincCode=e.code||id;
+  G('s-expResults').style.display='none';
+  G('s-expVinc').style.display='block';G('s-expVinc').textContent='✓ Vinculado: '+solExpVincCode;
+  notify('Expediente vinculado: '+solExpVincCode);
+}
+function uplSolPdf(tipo){
+  const inp=document.createElement('input');inp.type='file';inp.accept='application/pdf';
+  inp.onchange=async()=>{
+    const file=inp.files[0];if(!file)return;
+    solPdfB[tipo]=new Uint8Array(await file.arrayBuffer());solPdfN[tipo]=file.name;
+    const row=G(tipo==='sol'?'s-pdfSolRow':'s-pdfRespRow');
+    if(row)row.innerHTML=`<button class="bpv" style="font-size:.57rem;" onclick="viewSolPdf('${tipo}')">👁 Ver</button> <span style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--gl2);">✓ ${esc(file.name.slice(0,22))}</span>`;
+    notify('PDF cargado: '+file.name);
+  };inp.click();
+}
+function viewSolPdf(tipo){if(solPdfB[tipo])openPDFV(solPdfB[tipo],solPdfN[tipo]||'PDF');else notify('Sin PDF cargado');}
+async function saveSol(){
+  const hh=gv('s-hh'),mm2=gv('s-mm');
+  const fecha=buildDate(gv('s-fd'),gv('s-fm'),gv('s-fy'));
+  const hora=(hh!==''&&mm2!=='')?String(hh).padStart(2,'0')+':'+String(mm2).padStart(2,'0'):'';
+  const fechaDes=buildDate(gv('s-dfd'),gv('s-dfm'),gv('s-dfy'));
+  const desId=gv('s-designado');const desU=users.find(u=>u.uid===desId);
+  const data={
+    folioDRPA:gv('s-folioDRPA'),folioDDU:gv('s-folioDDU'),
+    solicitante:gv('s-solicitante'),tipo:gv('s-tipo'),
+    asunto:gv('s-asunto'),fecha,hora,
+    designadoId:desId||'',designadoNombre:desU?desU.nombre||desU.email:'',
+    fechaDes,oficioAtencion:gv('s-ofiAten'),oficioRespuesta:gv('s-ofiResp'),
+    estatus:gv('s-est')||'pendiente',obs:gv('s-obs'),
+    expVincId:solExpVincId||null,expVincCode:solExpVincCode||null,
+    pdfSolName:solPdfN.sol||'',pdfRespName:solPdfN.resp||'',
+    updAt:ts(),updBy:cu.email,updByName:cu.nombre
+  };
+  if(solPdfB.sol)data.pdfSolBytes=Array.from(solPdfB.sol);
+  if(solPdfB.resp)data.pdfRespBytes=Array.from(solPdfB.resp);
+  try{
+    syncBar(true);
+    if(editSolId){
+      await db.collection('solicitudes').doc(editSolId).update(data);
+      notify('✓ Solicitud actualizada');
+    }else{
+      data.createdAt=ts();data.createdBy=cu.email;data.createdByName=cu.nombre;
+      await db.collection('solicitudes').add(data);
+      notify('✓ Solicitud guardada');
+    }
+    // Send notification if designated
+    if(desId&&desU){
+      await sendNotif(desId,'Se te designó atender solicitud:\nFolio: '+(data.folioDRPA||'—')+'\nSolicitante: '+(data.solicitante||'—')+'\nAsunto: '+(data.asunto||'—'),null,null,true);
+    }
+    await logAudit('SOLICITUD',data.folioDRPA||'—','Solicitud '+(editSolId?'editada':'creada'),null,null);
+    closeModal('mSol');
+  }catch(err){notify('Error al guardar: '+err.message,6000);console.error('saveSol:',err);}
+  syncBar(false);
+}
+async function delSol(id){
+  if(!isMaster()){notify('Solo Master puede eliminar');return;}
+  if(!confirm('¿Eliminar esta solicitud?'))return;
+  await db.collection('solicitudes').doc(id).delete();notify('✓ Solicitud eliminada');
+}
+async function viewSolPdfStored(id,tipo){
+  const s=sols.find(x=>x.id===id);if(!s)return;
+  const raw=tipo==='sol'?s.pdfSolBytes:s.pdfRespBytes;
+  if(!raw){notify('Sin PDF');return;}
+  const bytes=Array.isArray(raw)?new Uint8Array(raw):raw;
+  openPDFV(bytes,(tipo==='sol'?s.pdfSolName:s.pdfRespName)||'PDF');
+}
+
+function renderSolTable(){
+  const body=G('solBody');if(!body)return;
+  const q=(gv('solSearch')||'').toLowerCase();
+  const list=sols.filter(s=>!q||[s.folioDRPA,s.folioDDU,s.solicitante,s.asunto,s.designadoNombre].some(v=>v&&v.toLowerCase().includes(q)));
+  if(!list.length){body.innerHTML='<div class="empty"><div class="emptyi">📋</div><div class="emptyt">Sin solicitudes</div></div>';return;}
+  const SEST={'pendiente':'p-suspendido','en-proceso':'p-tramite','atendida':'p-activo','cancelada':'p-concluido'};
+  const SESTL={'pendiente':'Pendiente','en-proceso':'En Proceso','atendida':'Atendida','cancelada':'Cancelada'};
+  body.innerHTML=list.map(s=>`
+    <div class="trow" style="grid-template-columns:1fr 1fr 1.5fr .9fr .9fr .8fr 70px;min-width:700px;" onclick="openSolModal(sols.find(x=>x.id==='${s.id}'))">
+      <div class="tcell mono">${esc(s.folioDRPA||'—')}</div>
+      <div class="tcell" style="font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--td);">${esc(s.folioDDU||'—')}</div>
+      <div class="tcell" style="color:var(--tm);">${esc(s.solicitante||'—')}</div>
+      <div class="tcell" style="font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--td);">${s.fecha?fd(s.fecha):'—'}</div>
+      <div class="tcell" style="font-size:.72rem;color:var(--tm);">${esc(s.designadoNombre||'—')}</div>
+      <div class="tcell"><span class="pill ${SEST[s.estatus]||''}">${SESTL[s.estatus]||s.estatus||'—'}</span></div>
+      <div class="tcell" style="display:flex;gap:.25rem;justify-content:flex-end;" onclick="event.stopPropagation()">
+        ${canEdit()?`<button class="bicon" onclick="openSolModal(sols.find(x=>x.id==='${s.id}'))">✎</button>`:''}
+        ${isMaster()?`<button class="bicon d" onclick="delSol('${s.id}')">✕</button>`:''}
+      </div></div>`).join('');
+}
+
+// ── MEMORÁNDUMS ───────────────────────────────────────
+function openMemoModal(data){
+  if(!canEdit()){notify('Sin permisos');return;}
+  editMemoId=data?.id||null;
+  memoPdfB=null;memoPdfN='';memoExpVincId=null;memoExpVincCode=null;
+  G('mMemoT').textContent=editMemoId?'Editar Memorándum':'Nuevo Memorándum';
+  ['m-num','m-remitente','m-destinatario','m-asunto','m-obs','m-fd','m-fm','m-fy','m-hh','m-mm','m-expBuscar'].forEach(id=>sv(id,''));
+  sv('m-tipo','recibido');
+  // Populate elaborado and designado
+  popUserSelects(['m-elaborado','m-designado']);
+  G('m-pdfRow').innerHTML='<button class="btnS" style="font-size:.58rem;" onclick="uplMemoPdf()">📎 Subir PDF</button>';
+  G('m-expResults').style.display='none';G('m-expVinc').style.display='none';
+  if(data){
+    sv('m-num',data.num||'');sv('m-tipo',data.tipo||'recibido');
+    sv('m-remitente',data.remitente||'');sv('m-destinatario',data.destinatario||'');
+    sv('m-elaborado',data.elaboradoId||'');sv('m-designado',data.designadoId||'');
+    sv('m-asunto',data.asunto||'');sv('m-obs',data.obs||'');
+    if(data.fecha)parseDate(data.fecha,'m-f');
+    if(data.hora){const p=data.hora.split(':');sv('m-hh',p[0]);sv('m-mm',p[1]);}
+    memoExpVincId=data.expVincId||null;memoExpVincCode=data.expVincCode||null;
+    if(memoExpVincCode){G('m-expVinc').style.display='block';G('m-expVinc').textContent='✓ Vinculado: '+memoExpVincCode;}
+    if(data.pdfName){G('m-pdfRow').innerHTML=`<button class="bpv" style="font-size:.57rem;" onclick="viewMemoPdf()">👁 Ver</button> <span style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--gl2);">✓ ${esc(data.pdfName.slice(0,24))}</span>`;}
+  }
+  openModal('mMemo');
+}
+function memoAutoSearch(){
+  const q=(gv('m-asunto')||'').toLowerCase().trim();if(q.length<3){G('m-expResults').style.display='none';return;}
+  const found=exps.filter(e=>(e.promovente||'').toLowerCase().includes(q)||(e.contenido||'').toLowerCase().includes(q)||(e.code||'').toLowerCase().includes(q)).slice(0,4);
+  if(!found.length){G('m-expResults').style.display='none';return;}
+  G('m-expResults').style.display='block';
+  G('m-expResults').innerHTML=found.map(e=>`<div class="search-item" onclick="selMemoExp('${e.id}')"><div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--gold);">${esc(e.code||'—')}</div><div style="font-size:.7rem;color:var(--tm);">${esc(e.promovente||'—')}</div></div>`).join('');
+}
+function memoBuscarExp(){
+  const q=(gv('m-expBuscar')||'').toLowerCase().trim();if(q.length<2){G('m-expResults').style.display='none';return;}
+  const found=exps.filter(e=>(e.code||'').toLowerCase().includes(q)||(e.promovente||'').toLowerCase().includes(q)).slice(0,5);
+  G('m-expResults').style.display=found.length?'block':'none';
+  G('m-expResults').innerHTML=found.map(e=>`<div class="search-item" onclick="selMemoExp('${e.id}')"><div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--gold);">${esc(e.code||'—')}</div><div style="font-size:.7rem;color:var(--tm);">${esc(e.promovente||'—')}</div></div>`).join('');
+}
+function selMemoExp(id){
+  const e=exps.find(x=>x.id===id);if(!e)return;
+  memoExpVincId=id;memoExpVincCode=e.code||id;
+  G('m-expResults').style.display='none';
+  G('m-expVinc').style.display='block';G('m-expVinc').textContent='✓ Vinculado: '+memoExpVincCode;
+}
+function uplMemoPdf(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='application/pdf';
+  inp.onchange=async()=>{
+    const file=inp.files[0];if(!file)return;
+    memoPdfB=new Uint8Array(await file.arrayBuffer());memoPdfN=file.name;
+    G('m-pdfRow').innerHTML=`<button class="bpv" style="font-size:.57rem;" onclick="viewMemoPdf()">👁 Ver</button> <span style="font-family:'IBM Plex Mono',monospace;font-size:.57rem;color:var(--gl2);">✓ ${esc(file.name.slice(0,24))}</span>`;
+    notify('PDF cargado: '+file.name);
+  };inp.click();
+}
+function viewMemoPdf(){if(memoPdfB)openPDFV(memoPdfB,memoPdfN||'Memorándum');else notify('Sin PDF');}
+async function saveMemo(){
+  const fecha=buildDate(gv('m-fd'),gv('m-fm'),gv('m-fy'));
+  const hh=gv('m-hh'),mm2=gv('m-mm');
+  const hora=(hh!==''&&mm2!=='')?String(hh).padStart(2,'0')+':'+String(mm2).padStart(2,'0'):'';
+  const elaboradoId=gv('m-elaborado'),designadoId=gv('m-designado');
+  const eU=users.find(u=>u.uid===elaboradoId);const dU=users.find(u=>u.uid===designadoId);
+  const data={num:gv('m-num'),tipo:gv('m-tipo'),remitente:gv('m-remitente'),destinatario:gv('m-destinatario'),
+    elaboradoId:elaboradoId||'',elaboradoNombre:eU?eU.nombre||eU.email:'',
+    designadoId:designadoId||'',designadoNombre:dU?dU.nombre||dU.email:'',
+    asunto:gv('m-asunto'),fecha,hora,obs:gv('m-obs'),
+    expVincId:memoExpVincId||null,expVincCode:memoExpVincCode||null,
+    pdfName:memoPdfN||'',updAt:ts(),updBy:cu.email,updByName:cu.nombre};
+  if(memoPdfB)data.pdfBytes=Array.from(memoPdfB);
+  try{
+    syncBar(true);
+    if(editMemoId){
+      await db.collection('memorandums').doc(editMemoId).update(data);notify('✓ Memorándum actualizado');
+    }else{
+      data.createdAt=ts();data.createdBy=cu.email;data.createdByName=cu.nombre;
+      await db.collection('memorandums').add(data);notify('✓ Memorándum guardado');
+    }
+    // Notify designated
+    if(designadoId&&dU){
+      await sendNotif(designadoId,'Se te designó un memorándum:\nNo: '+(data.num||'—')+'\nAsunto: '+(data.asunto||'—'),memoExpVincId,memoExpVincCode,true);
+    }
+    await logAudit('MEMO',data.num||'—','Memorándum '+(editMemoId?'editado':'creado'),null,null);
+    closeModal('mMemo');
+  }catch(err){notify('Error al guardar: '+err.message,6000);console.error('saveMemo:',err);}
+  syncBar(false);
+}
+async function delMemo(id){
+  if(!isMaster())return;if(!confirm('¿Eliminar?'))return;
+  await db.collection('memorandums').doc(id).delete();notify('✓ Eliminado');
+}
+async function viewMemoPdfStored(id){
+  const m=memos.find(x=>x.id===id);if(!m||!m.pdfBytes){notify('Sin PDF');return;}
+  const bytes=Array.isArray(m.pdfBytes)?new Uint8Array(m.pdfBytes):m.pdfBytes;
+  openPDFV(bytes,m.pdfName||'Memorándum');
+}
+function renderMemoTable(){
+  const body=G('memoBody');if(!body)return;
+  const q=(gv('memoSearch')||'').toLowerCase();
+  const list=memos.filter(m=>m.tipo===memoTab).filter(m=>!q||[m.num,m.remitente,m.destinatario,m.asunto,m.elaboradoNombre,m.designadoNombre].some(v=>v&&v.toLowerCase().includes(q)));
+  if(!list.length){body.innerHTML=`<div class="empty"><div class="emptyi">📝</div><div class="emptyt">Sin memorándums ${memoTab==='rec'?'recibidos':'enviados'}</div></div>`;return;}
+  body.innerHTML=list.map(m=>`
+    <div class="trow" style="grid-template-columns:.9fr 1.1fr 1.5fr .9fr .9fr 70px;min-width:680px;" onclick="openMemoModal(memos.find(x=>x.id==='${m.id}'))">
+      <div class="tcell mono">${esc(m.num||'—')}</div>
+      <div class="tcell" style="color:var(--tm);">${esc(memoTab==='rec'?m.remitente||m.elaboradoNombre||'—':m.destinatario||m.designadoNombre||'—')}</div>
+      <div class="tcell" style="color:var(--tm);">${esc(m.asunto||'—')}</div>
+      <div class="tcell" style="font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--td);">${m.fecha?fd(m.fecha):'—'}</div>
+      <div class="tcell">${m.pdfName?`<span style="font-family:'IBM Plex Mono',monospace;font-size:.53rem;padding:.08rem .3rem;border:1px solid var(--blu);color:var(--bl2);cursor:pointer;" onclick="event.stopPropagation();viewMemoPdfStored('${m.id}')">📄 Ver</span>`:'<span style="color:var(--td);font-size:.63rem">—</span>'}</div>
+      <div class="tcell" style="display:flex;gap:.25rem;justify-content:flex-end;" onclick="event.stopPropagation()">
+        ${canEdit()?`<button class="bicon" onclick="openMemoModal(memos.find(x=>x.id==='${m.id}'))">✎</button>`:''}
+        ${isMaster()?`<button class="bicon d" onclick="delMemo('${m.id}')">✕</button>`:''}
+      </div></div>`).join('');
+}
+
+// ── AUDITORÍA ─────────────────────────────────────────
+let audLog=[];
+async function renderAudit(){
+  try{
+    const snap=await db.collection('auditoria').orderBy('ts','desc').limit(300).get();
+    audLog=snap.docs.map(d=>({id:d.id,...d.data(),ts:d.data().ts?.toDate?.()?.toISOString()||''}));
+    const el=G('audList');if(!el)return;
+    if(!audLog.length){el.innerHTML='<div class="empty"><div class="emptyi">📋</div><div class="emptyt">Sin registros</div></div>';return;}
+    const m=isMaster();
+    el.innerHTML=audLog.map(e=>`<div class="arow" id="aud-${e.id}" onclick="${m?`audToggle('${e.id}',this)`:''}">
+      ${m?`<input type="checkbox" class="aud-chk" data-id="${e.id}" onclick="event.stopPropagation()" onchange="updAudDelBtn()" style="flex-shrink:0;accent-color:var(--gold);">`:''}
+      <span class="ats">${fdt(e.ts)}</span>
+      <span class="auser">${esc(e.userName||e.user||'?')}</span>
+      <div class="aact"><strong>[${esc(e.action||'?')}]</strong> ${esc(e.desc||'')}</div>
+    </div>`).join('');
+  }catch(err){const el=G('audList');if(el)el.innerHTML=`<div style="padding:1rem;color:var(--red);font-family:'IBM Plex Mono',monospace;font-size:.68rem;">Error: ${esc(err.message)}</div>`;}
+}
+function audToggle(id,row){const chk=row.querySelector('.aud-chk');if(chk){chk.checked=!chk.checked;row.classList.toggle('sel',chk.checked);updAudDelBtn();}}
+function updAudDelBtn(){const n=document.querySelectorAll('.aud-chk:checked').length;const btn=G('btnDelSel');if(btn)btn.textContent=`🗑 Eliminar (${n})`;}
+function audSelAll(){const chks=document.querySelectorAll('.aud-chk');const all=[...chks].every(c=>c.checked);chks.forEach(c=>{c.checked=!all;c.closest('.arow')?.classList.toggle('sel',!all);});updAudDelBtn();}
+async function audDelSel(){
+  const sel=[...document.querySelectorAll('.aud-chk:checked')].map(c=>c.dataset.id);
+  if(!sel.length){notify('Selecciona registros');return;}
+  if(!confirm(`¿Eliminar ${sel.length} registros?`))return;
+  try{const b=db.batch();sel.forEach(id=>b.delete(db.collection('auditoria').doc(id)));await b.commit();notify('✓ '+sel.length+' registros eliminados');renderAudit();}
+  catch(err){notify('Error: '+err.message,5000);}
+}
+async function audClearAll(){
+  if(!isMaster())return;if(!confirm('¿Eliminar TODA la bitácora? No se puede deshacer.'))return;
+  notify('Eliminando…');let n=0;
+  try{while(true){const s=await db.collection('auditoria').limit(400).get();if(s.empty)break;const b=db.batch();s.docs.forEach(d=>b.delete(d.ref));await b.commit();n+=s.docs.length;}
+    await logAudit('LIMPIAR','Auditoría',`Bitácora limpiada (${n} registros)`,null,null);
+    notify(`✓ ${n} registros eliminados`);renderAudit();}
+  catch(err){notify('Error: '+err.message,5000);}
+}
+function expAuditLog(){
+  db.collection('auditoria').orderBy('ts','desc').get().then(snap=>{
+    const lines=snap.docs.map(d=>{const e=d.data();return[e.ts?.toDate?.()?.toISOString()||'',e.user||'',e.userRole||'',e.action||'',e.ip||'',e.desc||''].join('\t');}).join('\n');
+    dlBlob(new Blob(['\uFEFFTimestamp\tUsuario\tRol\tAccion\tIP\tDescripcion\n'+lines],{type:'text/plain'}),`auditoria_DRPA_${new Date().toISOString().slice(0,10)}.txt`);
+    notify('✓ Log exportado');});
+}
+
+// ── NOTIFICACIONES ────────────────────────────────────
+async function sendNotif(paraUid,mensaje,expId,expCode,requiereConfirmar){
+  if(!paraUid||!cu)return;
+  try{await db.collection('notificaciones').add({
+    paraUid,de:cu.nombre||cu.email,deUid:cu.uid,mensaje,
+    expId:expId||null,expCodigo:expCode||null,
+    leida:false,confirmada:false,requiereConfirmar:!!requiereConfirmar,
+    ts:firebase.firestore.FieldValue.serverTimestamp()
+  });}catch(e){console.warn('notif:',e);}
+}
+async function sendAsgnNotifs(expId,expCode,promovente,asgns,reqs){
+  for(const a of(asgns||[])){
+    if(!a.abogId||a.devDate)continue;
+    await sendNotif(a.abogId,'Se te asignó el expediente:\n'+expCode+'\nPromovente: '+promovente,expId,expCode,true);
+  }
+  for(let i=0;i<(reqs||[]).length;i++){
+    const r=reqs[i];if(!r.abogId)continue;
+    await sendNotif(r.abogId,'Se te asignó requerimiento:\n'+expCode+'\nOficio: '+(r.oficio||'—'),expId,expCode,true);
+  }
+}
+function openNotif(){
+  const el=G('notifList');if(!el)return;
+  if(!notifs.length){el.innerHTML='<div style="padding:2rem;text-align:center;font-family:\'IBM Plex Mono\',monospace;font-size:.68rem;color:var(--td);">Sin notificaciones</div>';}
+  else{el.innerHTML=notifs.map(n=>`<div class="notif-item ${n.leida?'':'unread'}" onclick="onNotifClick('${n.id}','${n.expId||''}')">
+    <div class="ndot" style="background:${n.leida?'var(--bor2)':'var(--gold)'}"></div>
+    <div style="flex:1;">
+      <div style="font-size:.78rem;color:${n.leida?'var(--tm)':'var(--tx)'};">${esc(n.mensaje||'').replace(/\n/g,'<br>')}</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:.56rem;color:var(--td);margin-top:.18rem;">${fdt(n.ts)} · ${esc(n.de||'Sistema')}</div>
+      ${n.expCodigo?`<div style="font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--gold);margin-top:.15rem;">📁 ${esc(n.expCodigo)}</div>`:''}
+      ${(!n.leida&&n.requiereConfirmar&&!n.confirmada)?`<div style="margin-top:.42rem;"><button onclick="event.stopPropagation();confirmarNotif('${n.id}')" class="btnP" style="font-size:.6rem;padding:.3rem .65rem;">✓ Confirmar recepción</button></div>`:''}
+      ${n.confirmada?'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:.57rem;color:var(--gl2);margin-top:.15rem;">✓ Confirmada</div>':''}
+    </div></div>`).join('');}
+  openModal('mNotif');
+}
+async function onNotifClick(nId,expId){
+  try{await db.collection('notificaciones').doc(nId).update({leida:true});}catch(e){}
+  if(expId&&expId!=='undefined'&&expId!=='null'&&expId!==''){closeModal('mNotif');setTimeout(()=>openDet(expId),200);}
+}
+async function confirmarNotif(nId){
+  const n=notifs.find(x=>x.id===nId);if(!n)return;
+  try{
+    await db.collection('notificaciones').doc(nId).update({leida:true,confirmada:true,confirmadaAt:ts(),confirmadaPor:cu.nombre||cu.email});
+    if(n.deUid)await sendNotif(n.deUid,'✓ '+cu.nombre+' confirmó: '+(n.expCodigo||n.mensaje?.split('\n')[0]||'—'),n.expId,n.expCodigo,false);
+    notify('✓ Confirmada');
+  }catch(e){notify('Error: '+e.message);}
+}
+async function notifMarkAll(){
+  try{const b=db.batch();notifs.filter(n=>!n.leida).forEach(n=>b.update(db.collection('notificaciones').doc(n.id),{leida:true}));await b.commit();notify('✓ Todas marcadas como leídas');}
+  catch(e){notify('Error: '+e.message);}
+}
+
+// ── RESPALDO ──────────────────────────────────────────
+async function expZip(){
+  notify('Preparando ZIP…');
+  try{
+    const zip=new JSZip();const root=zip.folder('DRPA_Backup');
+    root.file('datos.json',JSON.stringify({v:'5',exportedAt:ts(),tipos,exps:exps.map(e=>({...e,pdfBytes:undefined})),sols:sols.map(s=>({...s,pdfSolBytes:undefined,pdfRespBytes:undefined})),memos:memos.map(m=>({...m,pdfBytes:undefined}))},null,2));
+    root.file('README.txt','DRPA Firebase Backup\nFecha: '+new Date().toLocaleString('es-MX')+'\nExpedientes: '+exps.length+'\nSolicitudes: '+sols.length+'\nMemorandums: '+memos.length);
+    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});
+    dlBlob(blob,'DRPA_backup_'+new Date().toISOString().slice(0,10)+'.zip');notify('✓ ZIP descargado');
+  }catch(err){notify('Error: '+err.message);}
+}
+async function impBackup(input){
+  if(!isMaster()){notify('Solo Master puede importar');return;}
+  const file=input.files[0];if(!file)return;input.value='';
+  if(!confirm('¿Importar? Solo se agregarán datos nuevos.'))return;
+  notify('Importando…');
+  try{
+    let jd=null;
+    if(file.name.endsWith('.zip')){const z=await JSZip.loadAsync(await file.arrayBuffer());const f=Object.values(z.files).find(x=>x.name.endsWith('.json')&&!x.dir);if(!f)throw new Error('Sin JSON en ZIP');jd=JSON.parse(await f.async('string'));}
+    else{jd=JSON.parse(await file.text());}
+    if(!jd)throw new Error('Formato inválido');
+    let imp=0,skip=0;
+    for(const e of(jd.exps||[])){if(!e.id)continue;const ex=await db.collection('expedientes').doc(e.id).get();if(!ex.exists){await db.collection('expedientes').doc(e.id).set({...e,pdfBytes:undefined});imp++;}else skip++;}
+    if(jd.tipos){const b=db.batch();jd.tipos.forEach(t=>{if(t.id)b.set(db.collection('tipos').doc(t.id),t,{merge:true});});await b.commit();}
+    notify(`✓ ${imp} expedientes importados · ${skip} ya existían`);
+    await logAudit('IMPORTAR','Sistema',`Backup importado: ${imp} expedientes`,null,null);
+  }catch(err){notify('Error: '+err.message,6000);}
+}
+async function impExcel(input){
+  if(!isMaster()){notify('Solo Master puede importar');return;}
+  const file=input.files[0];if(!file)return;input.value='';
+  if(typeof XLSX==='undefined'){notify('Librería Excel no cargada');return;}
+  try{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    if(!rows.length){notify('Archivo vacío');return;}
+    const cols=Object.keys(rows[0]);
+    const miss=['Codigo','Tipo','Promovente'].filter(r=>!cols.some(c=>c.toLowerCase()===r.toLowerCase()));
+    if(miss.length){notify('Faltan columnas: '+miss.join(', ')+'\nUsa "Descargar plantilla" para ver el formato correcto',6000);return;}
+    if(!confirm('¿Importar '+rows.length+' expedientes desde Excel?'))return;
+    let imp=0,err=0;
+    for(const row of rows){
+      try{
+        const tn=row.Tipo||row.tipo||'';const t=tipos.find(x=>x.nombre.toLowerCase()===tn.toLowerCase());
+        const id=uid();
+        await db.collection('expedientes').doc(id).set({
+          id,code:row.Codigo||row['Código']||'',tipoNombre:tn,tipoId:t?.id||'',
+          seccion:t?t.seccion:row.Seccion||row['Sección']||'',numExp:row['No Expediente']||'',
+          promovente:row.Promovente||'',direccion:row.Direccion||row['Dirección']||'',
+          fojas:String(row.Fojas||''),contenido:row.Contenido||'',
+          estatus:(row.Estatus||'activo').toLowerCase().replace(/\s/g,''),
+          asgns:[],reqs:[],hasPdf:false,pdfPages:0,pdfFiles:[],
+          createdAt:ts(),createdBy:cu.email,createdByName:cu.nombre,
+          updAt:ts(),updBy:cu.email,updByName:cu.nombre,updByRole:cu.rol
+        });imp++;
+      }catch(e2){err++;console.warn(e2);}
+    }
+    notify(`✓ Excel importado: ${imp} expedientes · ${err} errores`);
+    await logAudit('IMPORTAR-EXCEL','Sistema',`Excel importado: ${imp} expedientes`,null,null);
+  }catch(err){notify('Error al leer Excel: '+err.message,6000);}
+}
+function dlPlantilla(){
+  if(typeof XLSX==='undefined'){notify('Librería no cargada');return;}
+  const hdrs=[['Codigo','Tipo','Promovente','No Expediente','Seccion','Direccion','Fojas','Contenido','Estatus']];
+  const ejemplos=[
+    ['H.Ayuntamiento de Xalapa/DRPA/2C.1/01/26','Juicio de Amparo','Juan Pérez González','001/2026','2C.1','Calle Ejemplo 123, Col. Centro','45','Amparo indirecto contra acto administrativo','activo'],
+    ['H.Ayuntamiento de Xalapa/DRPA/2C.5/02/26','Juicio Contencioso Administrativo','María López Hernández','002/2026','2C.5','Av. Principal 456','30','Recurso de inconformidad','en-tramite'],
+  ];
+  const ws=XLSX.utils.aoa_to_sheet([...hdrs,...ejemplos]);
+  ws['!cols']=[{wch:52},{wch:38},{wch:32},{wch:15},{wch:10},{wch:32},{wch:8},{wch:42},{wch:15}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,'Expedientes',ws);
+  const inst=[['INSTRUCCIONES PARA IMPORTAR EXPEDIENTES DESDE EXCEL'],[''],
+    ['OBLIGATORIAS:'],['Codigo','Código único del expediente'],['Tipo','Nombre exacto del tipo (debe existir en el sistema)'],['Promovente','Nombre completo del promovente'],[''],
+    ['OPCIONALES:'],['No Expediente','Número de expediente'],['Seccion','Código de sección (ej. 2C.1)'],['Direccion','Dirección del promovente'],['Fojas','Número de fojas'],['Contenido','Descripción del expediente'],['Estatus','activo / en-tramite / suspendido / concluido / sobreseido'],[''],
+    ['NOTAS:'],['- La primera fila DEBE ser el encabezado exacto'],['- Los PDFs no se importan desde Excel, solo datos de texto'],['- El tipo debe coincidir exactamente con los registrados en el sistema'],['- Llena la hoja "Expedientes" y sube el archivo']];
+  const ws2=XLSX.utils.aoa_to_sheet(inst);ws2['!cols']=[{wch:32},{wch:65}];
+  XLSX.utils.book_append_sheet(wb,'Instrucciones',ws2);
+  XLSX.writeFile(wb,'Plantilla_DRPA_'+new Date().getFullYear()+'.xlsx');
+  notify('✓ Plantilla Excel descargada');
+}
+</script>
+</body>
+</html>
